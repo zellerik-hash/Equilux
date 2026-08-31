@@ -13,11 +13,11 @@
   --down: #e0554c;
   --london: #5b8def;
   --newyork: #e8a33d;
-  --mono: "DM Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --mono: var(--font-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   background: var(--bg);
   color: var(--ink);
-  font-family: "DM Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans), -apple-system, "Segoe UI", Roboto, sans-serif;
   min-height: 100vh;
   padding: 32px 24px 80px;
   max-width: 1180px;
