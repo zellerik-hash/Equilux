@@ -14,6 +14,8 @@ import { blackScholes, impliedVol, turbo } from "@/lib/quant/bs";
 import {
   engleGranger, adfStat, halfLife, backtestPair, EG_CRIT, ADF_CRIT,
 } from "@/lib/quant/statarb";
+import { valuation, type ValuationInput } from "@/lib/quant/valuation";
+import { rsi, atr, sma, risk, type Candle } from "@/lib/quant/indicators";
 
 // ── Mini-Harness ─────────────────────────────────────────────────────────────
 let passed = 0;
@@ -187,6 +189,65 @@ section("Backtest — Kostenmonotonie und additive Kurve");
     Number.isFinite(free.sharpe) && Number.isFinite(free.totalReturn) && Number.isFinite(free.annualReturn));
   ok("Kapitalkurve ohne NaN/negative Sprünge",
     free.equity.every((e) => Number.isFinite(e)));
+}
+
+// ── 9. Bewertung — Gordon-Anker & Plausibilität ──────────────────────────────
+section("Bewertung — Dividendendiskontierung (Gordon) & Plausibilität");
+{
+  const base: ValuationInput = {
+    eps: 0, bvps: 0, fcf: 0, div: 2, roic: 0,
+    g1: 0.05, g2: 0.03, g3: 0.02, pe: 15,
+    beta: 1, rf: 0.03, erp: 0.05, cap: "Large Cap", cycle: "Recovery",
+    sector: "tech", price: 30,
+  };
+  const r = valuation(base);
+  // Nur DDM aktiv: wacc = 0,03 + 1·0,05 + 0 = 0,08; cf(Recovery, tech) = 1,12
+  // Wert = 2/(0,08−0,02)·1,12 = 37,3333…
+  near("DDM = div/(wacc−g3)·cf ≈ 37,3333", r.fair, 37.3333, 1e-3);
+  ok("Nur eine Methode aktiv → Zuverlässigkeit LOW", r.activeCount === 1 && r.reliability === "LOW",
+    `active ${r.activeCount}, ${r.reliability}`);
+
+  // DCF-Plausibilität: höhere WACC senkt den Wert (über Beta gesteuert)
+  const dcfInput: ValuationInput = { ...base, div: 0, fcf: 10 };
+  const low = valuation({ ...dcfInput, beta: 0.8 });
+  const high = valuation({ ...dcfInput, beta: 1.6 });
+  ok("Höhere WACC (β) senkt den fairen Wert", high.fair < low.fair, `β0,8 ${low.fair} vs β1,6 ${high.fair}`);
+
+  // Höheres Wachstum hebt den Wert
+  const slow = valuation({ ...dcfInput, g1: 0.02 });
+  const fast = valuation({ ...dcfInput, g1: 0.12 });
+  ok("Höheres Wachstum hebt den fairen Wert", fast.fair > slow.fair, `g2% ${slow.fair} vs g12% ${fast.fair}`);
+
+  // Sensitivitätsraster: WACC steigt über die Zeilen → Wert fällt
+  const g = valuation(dcfInput).grid!;
+  ok("Sensitivität: über die WACC-Zeilen fällt der Wert",
+    g[0][2].value > g[4][2].value, `${g[0][2].value} → ${g[4][2].value}`);
+}
+
+// ── 10. Indikatoren — Grenzfälle & Handrechnung ──────────────────────────────
+section("Indikatoren — RSI/ATR/SMA-Anker");
+{
+  const up = Array.from({ length: 20 }, (_, i) => 100 + i); // streng steigend
+  const down = Array.from({ length: 20 }, (_, i) => 120 - i); // streng fallend
+  ok("RSI einer streng steigenden Reihe = 100", rsi(up) === 100, `${rsi(up)}`);
+  near("RSI einer streng fallenden Reihe = 0", rsi(down) ?? -1, 0, 1e-9);
+  near("SMA(5) von 1..10 = 8", sma(Array.from({ length: 10 }, (_, i) => i + 1), 5) ?? -1, 8, 1e-9);
+
+  // ATR: jede Kerze Spanne 2, keine Gaps → ATR = 2
+  const flat: Candle[] = Array.from({ length: 30 }, () => ({ o: 100, h: 101, l: 99, c: 100 }));
+  near("ATR bei konstanter Spanne 2 = 2", atr(flat) ?? -1, 2, 1e-9);
+}
+
+// ── 11. Risiko — monotone Kurve ──────────────────────────────────────────────
+section("Risiko — Kennzahlen einer streng steigenden Kurve");
+{
+  const closes = Array.from({ length: 60 }, (_, i) => 100 * 1.001 ** i);
+  const candles: Candle[] = closes.map((c) => ({ o: c, h: c, l: c, c }));
+  const rk = risk(candles)!;
+  ok("Streng steigende Kurve: MaxDrawdown = 0", rk.mdd === 0, `${rk.mdd}`);
+  ok("Streng steigende Kurve: Trefferquote 100 %", Math.abs(rk.winRate - 100) < 1e-9, `${rk.winRate}`);
+  ok("Positive Jahresrendite", rk.annReturn > 0, `${rk.annReturn}`);
+  ok("Kennzahlen endlich", Number.isFinite(rk.sharpe) && Number.isFinite(rk.annVol));
 }
 
 // ── Ergebnis ─────────────────────────────────────────────────────────────────

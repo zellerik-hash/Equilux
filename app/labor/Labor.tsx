@@ -3,6 +3,7 @@
 import { useState } from "react";
 import s from "./labor.module.css";
 import Derivate from "./panels/Derivate";
+import Bewertung from "./panels/Bewertung";
 import StatArb from "./panels/StatArb";
 import Sotp from "./panels/Sotp";
 import Filings from "./panels/Filings";
@@ -10,6 +11,7 @@ import Brief from "./panels/Brief";
 
 const TABS = [
   { key: "derivate", label: "Derivate", hint: "Black-Scholes, Greeks, Turbo" },
+  { key: "bewertung", label: "Bewertung", hint: "5-Methoden-DCF, Sensitivität" },
   { key: "statarb", label: "Stat-Arb", hint: "Kointegration, Kalman, Scan" },
   { key: "sotp", label: "SOTP", hint: "Segmentbewertung" },
   { key: "filings", label: "Filings", hint: "Kundenkonzentration" },
@@ -51,6 +53,7 @@ export default function Labor() {
 
       <main className={s.stage}>
         {tab === "derivate" && <Derivate />}
+        {tab === "bewertung" && <Bewertung />}
         {tab === "statarb" && <StatArb />}
         {tab === "sotp" && <Sotp />}
         {tab === "filings" && <Filings />}
