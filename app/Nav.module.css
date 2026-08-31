@@ -1,0 +1,60 @@
+/* EQUILUX — persistente Kopfzeile. Gescopet. */
+
+.nav {
+  --gold: #c8a24a;
+  --line: #252b36;
+  --ink: #e6e9ef;
+  --dim: #8a93a5;
+  --panel: #14181f;
+  --mono: var(--font-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  height: 56px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: saturate(140%) blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  font: 500 13px/1 var(--mono);
+  letter-spacing: 0.24em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+
+.links {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.link {
+  font-size: 13px;
+  color: var(--dim);
+  padding: 7px 12px;
+  border-radius: 7px;
+  transition: color 160ms var(--ease-out), background-color 160ms var(--ease-out),
+    transform 120ms var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .link:hover {
+    color: var(--ink);
+    background: var(--panel);
+  }
+}
+
+.link:active {
+  transform: scale(0.97);
+}
+
+.linkOn {
+  color: var(--ink);
+  background: var(--panel);
+}
