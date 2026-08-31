@@ -1,0 +1,84 @@
+/* EQUILUX — Startseite. Gescopet. */
+
+.shell {
+  --bg: #0c0e13;
+  --panel: #14181f;
+  --line: #252b36;
+  --ink: #e6e9ef;
+  --dim: #8a93a5;
+  --faint: #5b6474;
+  --gold: #c8a24a;
+  --london: #5b8def;
+  --newyork: #e8a33d;
+  --mono: "DM Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  min-height: 100vh;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 64px 24px 80px;
+  display: flex;
+  flex-direction: column;
+}
+
+.eyebrow {
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.title {
+  font-size: 44px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  margin: 14px 0 0;
+}
+
+.lede {
+  color: var(--dim);
+  font-size: 15px;
+  max-width: 64ch;
+  margin: 16px 0 0;
+  line-height: 1.6;
+}
+
+.grid {
+  margin-top: 44px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  display: block;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.card:hover {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+}
+
+.cardName {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.cardHint {
+  color: var(--dim);
+  font-size: 13px;
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+
+.foot {
+  margin-top: auto;
+  padding-top: 48px;
+  color: var(--faint);
+  font: 400 12px/1.6 var(--mono);
+}
