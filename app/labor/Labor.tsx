@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import s from "./labor.module.css";
 import Derivate from "./panels/Derivate";
 import Bewertung from "./panels/Bewertung";
@@ -20,8 +21,19 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
+const KEYS = TABS.map((t) => t.key);
+const isTabKey = (v: string | null): v is TabKey => v !== null && (KEYS as readonly string[]).includes(v);
+
 export default function Labor() {
-  const [tab, setTab] = useState<TabKey>("derivate");
+  const router = useRouter();
+  const params = useSearchParams();
+  const initial = params.get("k");
+  const [tab, setTab] = useState<TabKey>(isTabKey(initial) ? initial : "derivate");
+
+  const select = (key: TabKey) => {
+    setTab(key);
+    router.replace(`/labor?k=${key}`, { scroll: false });
+  };
 
   return (
     <div className={s.shell}>
@@ -43,7 +55,7 @@ export default function Labor() {
             role="tab"
             aria-selected={tab === t.key}
             className={`${s.tab} ${tab === t.key ? s.tabOn : ""}`}
-            onClick={() => setTab(t.key)}
+            onClick={() => select(t.key)}
           >
             <span className={s.tabLabel}>{t.label}</span>
             <span className={s.tabHint}>{t.hint}</span>
