@@ -1,0 +1,46 @@
+.toggle {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.track {
+  width: 52px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  transition: background-color 0.3s var(--ease-out), border-color 0.3s var(--ease-out);
+}
+
+.knob {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--gold);
+  transition: transform 0.34s var(--ease-out), color 0.3s var(--ease-out);
+}
+
+.knobLight {
+  transform: translateX(0);
+}
+
+.knobDark {
+  transform: translateX(24px);
+}
+
+.toggle:active .knob {
+  transform: scale(0.92) translateX(var(--x, 0));
+}

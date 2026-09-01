@@ -1,0 +1,60 @@
+/* EQUILUX — Aurora-Hintergrund. Weiche, driftende Farbfelder, theme-aware. */
+
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  will-change: transform;
+}
+
+.a {
+  top: -18%;
+  left: -8%;
+  width: 58vw;
+  height: 58vw;
+  background: radial-gradient(circle, var(--aurora-a), transparent 66%);
+  animation: floatA 26s var(--ease-in-out) infinite alternate;
+}
+.b {
+  top: 4%;
+  right: -12%;
+  width: 52vw;
+  height: 52vw;
+  background: radial-gradient(circle, var(--aurora-b), transparent 66%);
+  animation: floatB 32s var(--ease-in-out) infinite alternate;
+}
+.c {
+  bottom: -22%;
+  left: 22%;
+  width: 50vw;
+  height: 50vw;
+  background: radial-gradient(circle, var(--aurora-c), transparent 66%);
+  animation: floatC 36s var(--ease-in-out) infinite alternate;
+}
+
+.grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 30%, #000 30%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 30%, #000 30%, transparent 100%);
+}
+
+@keyframes floatA { to { transform: translate3d(7%, 6%, 0) scale(1.16); } }
+@keyframes floatB { to { transform: translate3d(-8%, 8%, 0) scale(1.12); } }
+@keyframes floatC { to { transform: translate3d(6%, -6%, 0) scale(1.2); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .blob { animation: none; }
+}

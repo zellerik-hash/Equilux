@@ -1,4 +1,4 @@
-/* EQUILUX — globaler Grund. Bereichsstyles liegen gescopet in CSS-Modules. */
+/* EQUILUX — globale Design-Sprache. Hell/Dunkel über data-theme + System. */
 
 *,
 *::before,
@@ -12,21 +12,119 @@ body {
   padding: 0;
 }
 
+/* ── Design-Tokens ─────────────────────────────────────────────────────────
+   Hell ist der Grundfall auf :root. Dunkel wird zweifach überschrieben:
+   per System (prefers-color-scheme), außer der Nutzer erzwingt hell, UND
+   per explizitem data-theme="dark". So gewinnt der Umschalter in beide
+   Richtungen und die Systemvorgabe greift, solange nichts gesetzt ist. */
 :root {
-  color-scheme: dark;
-  --bg: #0c0e13;
-  --ink: #e6e9ef;
-  /* Eigene Easing-Kurven — die CSS-Standardkurven sind zu schwach. */
+  color-scheme: light;
+
+  --bg: #f6f7f9;
+  --bg-2: #eef0f4;
+  --surface: #ffffff;
+  --surface-2: #f3f5f8;
+  --border: #e3e7ee;
+  --border-strong: #d2d8e2;
+  --text: #14171f;
+  --text-dim: #5a6473;
+  --text-faint: #8a93a2;
+
+  --gold: #b0862f;
+  --accent: #4f6ef2;      /* blau */
+  --accent-2: #8b5cf6;    /* violett */
+  --up: #129e6f;
+  --down: #d4453c;
+  --london: #4f6ef2;
+  --newyork: #d8912a;
+
+  --aurora-a: rgba(79, 110, 242, 0.20);
+  --aurora-b: rgba(139, 92, 246, 0.16);
+  --aurora-c: rgba(176, 134, 47, 0.14);
+  --spot: rgba(79, 110, 242, 0.14);
+  --grid-line: rgba(20, 23, 31, 0.045);
+
+  --radius: 16px;
+  --radius-sm: 11px;
+  --shadow: 0 1px 2px rgba(16, 20, 30, 0.04), 0 8px 30px rgba(16, 20, 30, 0.06);
+  --shadow-lg: 0 20px 60px rgba(16, 20, 30, 0.12);
+
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+  --font-sans-stack: var(--font-sans), -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono-stack: var(--font-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #06070c;
+    --bg-2: #0a0c13;
+    --surface: #0e1119;
+    --surface-2: #141926;
+    --border: #1e2431;
+    --border-strong: #2b3242;
+    --text: #eef1f6;
+    --text-dim: #98a1b2;
+    --text-faint: #626c7e;
+
+    --gold: #d4ad57;
+    --accent: #6b8bff;
+    --accent-2: #a78bfa;
+    --up: #3fbf8f;
+    --down: #e0554c;
+    --london: #6b8bff;
+    --newyork: #e8a33d;
+
+    --aurora-a: rgba(91, 141, 239, 0.22);
+    --aurora-b: rgba(139, 92, 246, 0.20);
+    --aurora-c: rgba(200, 162, 74, 0.16);
+    --spot: rgba(107, 139, 255, 0.16);
+    --grid-line: rgba(255, 255, 255, 0.03);
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 40px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.6);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #06070c;
+  --bg-2: #0a0c13;
+  --surface: #0e1119;
+  --surface-2: #141926;
+  --border: #1e2431;
+  --border-strong: #2b3242;
+  --text: #eef1f6;
+  --text-dim: #98a1b2;
+  --text-faint: #626c7e;
+
+  --gold: #d4ad57;
+  --accent: #6b8bff;
+  --accent-2: #a78bfa;
+  --up: #3fbf8f;
+  --down: #e0554c;
+  --london: #6b8bff;
+  --newyork: #e8a33d;
+
+  --aurora-a: rgba(91, 141, 239, 0.22);
+  --aurora-b: rgba(139, 92, 246, 0.20);
+  --aurora-c: rgba(200, 162, 74, 0.16);
+  --spot: rgba(107, 139, 255, 0.16);
+  --grid-line: rgba(255, 255, 255, 0.03);
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 40px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.6);
 }
 
 body {
   background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font-sans), -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  font-family: var(--font-sans-stack);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  transition: background-color 0.4s var(--ease-out), color 0.4s var(--ease-out);
 }
 
 a {

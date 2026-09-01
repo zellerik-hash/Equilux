@@ -1,60 +1,40 @@
-/* EQUILUX — persistente Kopfzeile. Gescopet. */
+/* EQUILUX — globale Kopfzeile, theme-aware. */
 
 .nav {
-  --gold: #c8a24a;
-  --line: #252b36;
-  --ink: #e6e9ef;
-  --dim: #8a93a5;
-  --panel: #14181f;
-  --mono: var(--font-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-
   position: sticky;
   top: 0;
   z-index: 50;
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 0 24px;
-  height: 56px;
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-  backdrop-filter: saturate(140%) blur(10px);
-  border-bottom: 1px solid var(--line);
+  gap: 20px;
+  height: 60px;
+  padding: 0 clamp(20px, 4vw, 44px);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: saturate(150%) blur(12px);
+  border-bottom: 1px solid var(--border);
 }
 
 .brand {
-  font: 500 13px/1 var(--mono);
-  letter-spacing: 0.24em;
+  font: 500 14px/1 var(--font-mono-stack);
+  letter-spacing: 0.26em;
   color: var(--gold);
-  text-transform: uppercase;
 }
 
-.links {
-  display: flex;
-  gap: 4px;
+.right {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 18px;
 }
 
 .link {
-  font-size: 13px;
-  color: var(--dim);
-  padding: 7px 12px;
-  border-radius: 7px;
-  transition: color 160ms var(--ease-out), background-color 160ms var(--ease-out),
-    transform 120ms var(--ease-out);
+  font-size: 14px;
+  color: var(--text-dim);
+  padding: 8px 14px;
+  border-radius: 999px;
+  transition: color 0.16s var(--ease-out), background-color 0.16s var(--ease-out);
 }
-
-@media (hover: hover) and (pointer: fine) {
-  .link:hover {
-    color: var(--ink);
-    background: var(--panel);
-  }
+@media (hover: hover) {
+  .link:hover { color: var(--text); background: var(--surface-2); }
 }
-
-.link:active {
-  transform: scale(0.97);
-}
-
-.linkOn {
-  color: var(--ink);
-  background: var(--panel);
-}
+.link:active { transform: scale(0.97); }
