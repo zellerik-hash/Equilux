@@ -1,111 +1,72 @@
-/* EQUILUX — Methodik-Schublade (Vaul). Portal-Inhalt, daher eigene Datei. */
+/* EQUILUX — Methodik-Schublade (Vaul). Portal-Inhalt, eigene Datei, theme-aware. */
 
 .trigger {
-  --gold: #c8a24a;
-  --line: #252b36;
-  --panel: #14181f;
-  --dim: #8a93a5;
-  --ink: #e6e9ef;
-  --mono: var(--font-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   background: transparent;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 7px 14px;
-  color: var(--dim);
-  font: 500 12px/1 var(--mono);
-  letter-spacing: 0.04em;
+  padding: 6px 12px;
+  color: var(--text-dim);
+  font: 500 11.5px/1 var(--font-mono-stack);
+  letter-spacing: 0.03em;
   cursor: pointer;
-  transition: color 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 120ms var(--ease-out);
+  transition: color 0.16s var(--ease-out), border-color 0.16s var(--ease-out), transform 0.12s var(--ease-out);
 }
-.trigger:hover { color: var(--ink); border-color: var(--gold); }
+.trigger:hover { color: var(--text); border-color: var(--gold); }
 .trigger:active { transform: scale(0.97); }
-.triggerDot { color: var(--gold); font-size: 14px; line-height: 0; }
+.triggerDot { color: var(--gold); font-size: 13px; line-height: 0; }
 
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(6, 8, 12, 0.6);
-  backdrop-filter: blur(2px);
+  background: color-mix(in srgb, var(--bg) 45%, rgba(0, 0, 0, 0.55));
+  backdrop-filter: blur(3px);
   z-index: 60;
 }
 
 .content {
-  --line: #252b36;
-  --panel: #14181f;
-  --dim: #8a93a5;
-  --faint: #5b6474;
-  --gold: #c8a24a;
-  --ink: #e6e9ef;
-  --mono: var(--font-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 61;
   max-height: 82vh;
-  background: #0f1219;
-  border-top: 1px solid var(--line);
-  border-radius: 18px 18px 0 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
   padding: 12px 24px 40px;
   outline: none;
-  font-family: var(--font-sans), -apple-system, "Segoe UI", Roboto, sans-serif;
-  color: var(--ink);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-sans-stack);
+  color: var(--text);
 }
 
-.inner {
-  max-width: 720px;
-  margin: 0 auto;
-}
+.inner { max-width: 720px; margin: 0 auto; }
 
-.handle {
-  width: 44px;
-  height: 5px;
-  border-radius: 999px;
-  background: #2b313d;
-  margin: 0 auto 22px;
-}
+.handle { width: 44px; height: 5px; border-radius: 999px; background: var(--border-strong); margin: 0 auto 22px; }
 
 .eyebrow {
-  font: 500 10px/1 var(--mono);
+  font: 500 10px/1 var(--font-mono-stack);
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--gold);
 }
 
-.title {
-  font-size: 21px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  margin: 10px 0 18px;
-}
+.title { font-size: 21px; font-weight: 600; letter-spacing: -0.02em; margin: 10px 0 18px; }
 
 .item {
   display: flex;
   gap: 12px;
   padding: 13px 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--border);
   font-size: 14px;
   line-height: 1.55;
-  color: #c2c8d4;
+  color: var(--text-dim);
 }
-.item:last-child { border-bottom: 1px solid var(--line); }
+.item:last-of-type { border-bottom: 1px solid var(--border); }
 
-.marker {
-  flex: none;
-  margin-top: 7px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--gold);
-}
+.marker { flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
 
-.foot {
-  margin-top: 20px;
-  color: var(--faint);
-  font: 400 12px/1.5 var(--mono);
-}
+.foot { margin-top: 20px; color: var(--text-faint); font: 400 12px/1.5 var(--font-mono-stack); }

@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { Reorder, useDragControls, AnimatePresence, motion } from "motion/react";
 import s from "./labor.module.css";
 import Methodik from "./Methodik";
 import SessionClock from "./SessionClock";
+import ThemeToggle from "../ThemeToggle";
 import Derivate from "./panels/Derivate";
 import Bewertung from "./panels/Bewertung";
 import StatArb from "./panels/StatArb";
@@ -14,108 +14,161 @@ import Sotp from "./panels/Sotp";
 import Filings from "./panels/Filings";
 import Brief from "./panels/Brief";
 
-const TABS = [
-  { key: "derivate", label: "Derivate", hint: "Black-Scholes, Greeks, Turbo" },
-  { key: "bewertung", label: "Bewertung", hint: "5-Methoden-DCF, Sensitivität" },
-  { key: "statarb", label: "Stat-Arb", hint: "Kointegration, Kalman, Scan" },
-  { key: "sotp", label: "SOTP", hint: "Segmentbewertung" },
-  { key: "filings", label: "Filings", hint: "Kundenkonzentration" },
-  { key: "brief", label: "Marktbrief", hint: "Session-Briefing" },
-] as const;
+type Key = "derivate" | "bewertung" | "statarb" | "sotp" | "filings" | "brief";
 
-type TabKey = (typeof TABS)[number]["key"];
-const KEYS = TABS.map((t) => t.key);
-const isTabKey = (v: string | null): v is TabKey =>
-  v !== null && (KEYS as readonly string[]).includes(v);
+const REGISTRY: Record<Key, { kicker: string; name: string; Comp: React.ComponentType }> = {
+  derivate: { kicker: "Derivate", name: "Optionsscheine & Turbos", Comp: Derivate },
+  bewertung: { kicker: "Bewertung", name: "Fünf-Methoden-DCF", Comp: Bewertung },
+  statarb: { kicker: "Stat-Arb", name: "Kointegration & Backtest", Comp: StatArb },
+  sotp: { kicker: "SOTP", name: "Sum-of-the-Parts", Comp: Sotp },
+  filings: { kicker: "Filings", name: "Kundenkonzentration", Comp: Filings },
+  brief: { kicker: "Marktbrief", name: "Session-Briefing", Comp: Brief },
+};
+
+const ALL: Key[] = ["derivate", "bewertung", "statarb", "sotp", "filings", "brief"];
+const STORE = "equilux-terminal-v1";
 
 export default function Labor() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const reduce = useReducedMotion();
-  const initial = params.get("k");
-  const [tab, setTab] = useState<TabKey>(isTabKey(initial) ? initial : "derivate");
-  const active = TABS.find((t) => t.key === tab)!;
+  const [order, setOrder] = useState<Key[]>(ALL);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  const select = (key: TabKey) => {
-    setTab(key);
-    router.replace(`/labor?k=${key}`, { scroll: false });
+  // Gespeicherte Zusammenstellung nach dem Mounten laden (kein Hydration-Mismatch).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORE);
+      if (raw) {
+        const saved = JSON.parse(raw) as { order?: Key[]; collapsed?: Record<string, boolean> };
+        if (Array.isArray(saved.order)) {
+          const clean = saved.order.filter((k): k is Key => ALL.includes(k));
+          setOrder(clean);
+        }
+        if (saved.collapsed) setCollapsed(saved.collapsed);
+      }
+    } catch {
+      /* Speicher gesperrt — Standardaufbau */
+    }
+  }, []);
+
+  const persist = (nextOrder: Key[], nextCollapsed: Record<string, boolean>) => {
+    try {
+      localStorage.setItem(STORE, JSON.stringify({ order: nextOrder, collapsed: nextCollapsed }));
+    } catch {
+      /* egal */
+    }
   };
+
+  const reorder = (next: Key[]) => { setOrder(next); persist(next, collapsed); };
+  const add = (k: Key) => { const next = [...order, k]; setOrder(next); persist(next, collapsed); };
+  const remove = (k: Key) => { const next = order.filter((x) => x !== k); setOrder(next); persist(next, collapsed); };
+  const toggle = (k: Key) => {
+    const next = { ...collapsed, [k]: !collapsed[k] };
+    setCollapsed(next); persist(order, next);
+  };
+  const reset = () => { setOrder(ALL); setCollapsed({}); persist(ALL, {}); };
+
+  const available = ALL.filter((k) => !order.includes(k));
 
   return (
     <div className={s.shell}>
-      <div className={s.backdrop} aria-hidden="true">
-        <div className={s.gridLines} />
-        <div className={s.glow} />
-        <div className={s.glow2} />
+      <header className={s.topbar}>
+        <Link href="/" className={s.brandMark}>EQUILUX</Link>
+        <Link href="/" className={s.backLink}>← Übersicht</Link>
+        <div className={s.topRight}>
+          <SessionClock />
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <div className={s.lead}>
+        <h1 className={s.leadTitle}>Dein Terminal</h1>
+        <p className={s.leadSub}>
+          Stell dir die Module zusammen, die du brauchst — hinzufügen, per Griff anordnen,
+          einklappen. Deine Anordnung wird lokal gespeichert. Jede Zahl ist ein Modellwert,
+          kein Marktpreis, keine Anlageberatung.
+        </p>
       </div>
 
-      <aside className={s.sidebar}>
-        <div className={s.brandRow}>
-          <Link href="/" className={s.brandMark}>EQUILUX</Link>
-          <Link href="/" className={s.backLink}>← Übersicht</Link>
-        </div>
-        <div className={s.railHeading}>Rechenkerne</div>
-        <nav className={s.rail} role="tablist" aria-label="Rechenkerne">
-          {TABS.map((t) => {
-            const on = t.key === tab;
-            return (
-              <button
-                key={t.key}
-                role="tab"
-                aria-selected={on}
-                className={`${s.railItem} ${on ? s.railItemOn : ""}`}
-                onClick={() => select(t.key)}
-              >
-                {on && (
-                  <motion.span
-                    layoutId="railActive"
-                    className={s.railInd}
-                    transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 34 }}
-                  />
-                )}
-                <span className={s.railLabel}>{t.label}</span>
-                <span className={s.railHint}>{t.hint}</span>
-              </button>
-            );
-          })}
-        </nav>
-        <div className={s.railFoot}>
-          <Methodik tab={tab} />
-          <span className={s.testChip}>
-            <span className={s.testDot} /> 43 Referenztests grün
-          </span>
-        </div>
-      </aside>
+      <div className={s.palette}>
+        <span className={s.paletteLabel}>Module</span>
+        {available.length === 0 && <span className={s.paletteLabel} style={{ opacity: 0.6 }}>alle aktiv</span>}
+        {available.map((k) => (
+          <button key={k} className={s.addChip} onClick={() => add(k)}>
+            <span className={s.addPlus}>+</span> {REGISTRY[k].kicker}
+          </button>
+        ))}
+        <button className={s.resetBtn} onClick={reset}>Zurücksetzen</button>
+      </div>
 
-      <main className={s.main}>
-        <header className={s.topbar}>
-          <div>
-            <span className={s.crumb}>Rechenlabor</span>
-            <h1 className={s.pageTitle}>{active.label}</h1>
-            <p className={s.pageHint}>{active.hint} · Modellwerte, keine Anlageberatung</p>
-          </div>
-          <SessionClock />
-        </header>
-
-        <div className={s.stage}>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={tab}
-              initial={{ opacity: 0, y: reduce ? 0 : 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: reduce ? 0 : -8 }}
-              transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
-            >
-              {tab === "derivate" && <Derivate />}
-              {tab === "bewertung" && <Bewertung />}
-              {tab === "statarb" && <StatArb />}
-              {tab === "sotp" && <Sotp />}
-              {tab === "filings" && <Filings />}
-              {tab === "brief" && <Brief />}
-            </motion.div>
+      {order.length === 0 ? (
+        <div className={s.empty}>
+          <p className={s.emptyTitle}>Leeres Terminal</p>
+          <p className={s.emptyText}>Füge oben ein Modul hinzu, um zu starten.</p>
+        </div>
+      ) : (
+        <Reorder.Group as="ul" axis="y" values={order} onReorder={reorder} className={s.modules}>
+          <AnimatePresence initial={false}>
+            {order.map((k) => (
+              <ModuleCard
+                key={k}
+                k={k}
+                collapsed={!!collapsed[k]}
+                onToggle={() => toggle(k)}
+                onRemove={() => remove(k)}
+              />
+            ))}
           </AnimatePresence>
-        </div>
-      </main>
+        </Reorder.Group>
+      )}
     </div>
+  );
+}
+
+function ModuleCard({
+  k, collapsed, onToggle, onRemove,
+}: {
+  k: Key; collapsed: boolean; onToggle: () => void; onRemove: () => void;
+}) {
+  const controls = useDragControls();
+  const mod = REGISTRY[k];
+  const Comp = mod.Comp;
+
+  return (
+    <Reorder.Item
+      value={k}
+      dragListener={false}
+      dragControls={controls}
+      className={`${s.module} ${collapsed ? s.collapsed : ""}`}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+    >
+      <div className={s.moduleHead}>
+        <span
+          className={s.dragHandle}
+          onPointerDown={(e) => controls.start(e)}
+          title="Ziehen zum Anordnen"
+          aria-label="Ziehen zum Anordnen"
+        >
+          ⠿
+        </span>
+        <div className={s.moduleMeta}>
+          <span className={s.moduleKicker}>{mod.kicker}</span>
+          <h2 className={s.moduleName}>{mod.name}</h2>
+        </div>
+        <div className={s.moduleActions}>
+          <Methodik tab={k} />
+          <button className={s.iconBtn} onClick={onToggle} aria-label={collapsed ? "Ausklappen" : "Einklappen"}>
+            {collapsed ? "▸" : "▾"}
+          </button>
+          <button className={`${s.iconBtn} ${s.removeBtn}`} onClick={onRemove} aria-label="Modul entfernen">
+            ✕
+          </button>
+        </div>
+      </div>
+      <div className={s.moduleBody}>
+        <Comp />
+      </div>
+    </Reorder.Item>
   );
 }
