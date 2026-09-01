@@ -5,6 +5,7 @@ import s from "../labor.module.css";
 import { sotp, sotpSensitivity, impliedMultipleFactor } from "@/lib/quant/sotp";
 import type { Segment, SotpBasis, SotpInput } from "@/lib/quant/sotp";
 import { de, pct, pctPlain } from "@/lib/quant/num";
+import { Num as NumF, Eur, Pct, PctPlain } from "../Num";
 
 const BASES: { key: SotpBasis; label: string }[] = [
   { key: "ebitda", label: "EBITDA" }, { key: "ebit", label: "EBIT" },
@@ -105,14 +106,14 @@ export default function Sotp() {
       </div>
 
       <div className={s.stats}>
-        <Stat label="Brutto-EV" value={`${de(r.grossEv, 0)} Mio.`} />
-        <Stat label="EK vor Abschlag" value={`${de(r.equityBeforeDiscount, 0)} Mio.`} />
-        <Stat label="EK nach Abschlag" value={`${de(r.equityValue, 0)} Mio.`} />
-        <Stat label="Wert je Aktie" value={`${de(r.perShare)} €`} big />
+        <Stat label="Brutto-EV" value={<NumF v={r.grossEv} d={0} suffix=" Mio." />} />
+        <Stat label="EK vor Abschlag" value={<NumF v={r.equityBeforeDiscount} d={0} suffix=" Mio." />} />
+        <Stat label="EK nach Abschlag" value={<NumF v={r.equityValue} d={0} suffix=" Mio." />} />
+        <Stat label="Wert je Aktie" value={<Eur v={r.perShare} />} big />
         <Stat label="Abstand zum Kurs"
-          value={r.upside === null ? "—" : pct(r.upside, 1)}
+          value={r.upside === null ? "—" : <Pct v={r.upside} d={1} />}
           tone={r.upside !== null && r.upside > 0 ? "up" : "down"} />
-        <Stat label="Verschuldung am Brutto-EV" value={pctPlain(r.leverageShare, 0)}
+        <Stat label="Verschuldung am Brutto-EV" value={<PctPlain v={r.leverageShare} d={0} />}
           tone={r.leverageShare > 0.5 ? "down" : undefined} />
       </div>
 
@@ -184,7 +185,7 @@ function Num(props: { label: string; value: number; step?: string; onChange: (v:
   );
 }
 
-function Stat(props: { label: string; value: string; tone?: "up" | "down"; big?: boolean }) {
+function Stat(props: { label: string; value: React.ReactNode; tone?: "up" | "down"; big?: boolean }) {
   return (
     <div className={`${s.stat} ${props.big ? s.statBig : ""}`}>
       <span className={s.statLabel}>{props.label}</span>

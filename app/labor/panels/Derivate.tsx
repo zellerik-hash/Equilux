@@ -5,6 +5,7 @@ import s from "../labor.module.css";
 import { warrant, turbo, impliedVol, scenarioMatrix } from "@/lib/quant/bs";
 import type { WarrantInput } from "@/lib/quant/bs";
 import { de, pct, pctPlain, eur } from "@/lib/quant/num";
+import { Num, Eur, Pct, PctPlain } from "../Num";
 
 /**
  * Die Rechnung läuft im Browser, nicht über die Route: Black-Scholes kostet
@@ -90,42 +91,42 @@ export default function Derivate() {
           )}
 
           <div className={s.stats}>
-            <Stat label="Modellwert" value={eur(w.fair, 3)} />
-            <Stat label="Innerer Wert" value={eur(w.intrinsic, 3)} />
-            <Stat label="Zeitwert" value={eur(w.timeValue, 3)} />
-            <Stat label="Break-even" value={eur(w.breakEven)} />
-            <Stat label="Aufgeld" value={pctPlain(w.premium)} sub={`${pctPlain(w.premiumPa)} p. a.`} />
-            <Stat label="Hebel" value={de(w.leverage, 2)} />
-            <Stat label="Omega" value={de(w.omega, 2)} />
-            <Stat label="Im Geld enden" value={pctPlain(w.greeks.probItm, 1)} />
+            <Stat label="Modellwert" value={<Eur v={w.fair} d={3} />} />
+            <Stat label="Innerer Wert" value={<Eur v={w.intrinsic} d={3} />} />
+            <Stat label="Zeitwert" value={<Eur v={w.timeValue} d={3} />} />
+            <Stat label="Break-even" value={<Eur v={w.breakEven} />} />
+            <Stat label="Aufgeld" value={<PctPlain v={w.premium} />} sub={`${pctPlain(w.premiumPa)} p. a.`} />
+            <Stat label="Hebel" value={<Num v={w.leverage} d={2} />} />
+            <Stat label="Omega" value={<Num v={w.omega} d={2} />} />
+            <Stat label="Im Geld enden" value={<PctPlain v={w.greeks.probItm} d={1} />} />
           </div>
 
           <h3 className={s.h3}>Greeks</h3>
           <div className={s.stats}>
-            <Stat label="Delta" value={de(w.greeks.delta, 4)} />
-            <Stat label="Gamma" value={de(w.greeks.gamma, 5)} />
-            <Stat label="Theta / Tag" value={de(w.greeks.theta, 4)} />
-            <Stat label="Vega / Vola-Punkt" value={de(w.greeks.vega, 4)} />
-            <Stat label="Rho / Zinspunkt" value={de(w.greeks.rho, 4)} />
+            <Stat label="Delta" value={<Num v={w.greeks.delta} d={4} />} />
+            <Stat label="Gamma" value={<Num v={w.greeks.gamma} d={5} />} />
+            <Stat label="Theta / Tag" value={<Num v={w.greeks.theta} d={4} />} />
+            <Stat label="Vega / Vola-Punkt" value={<Num v={w.greeks.vega} d={4} />} />
+            <Stat label="Rho / Zinspunkt" value={<Num v={w.greeks.rho} d={4} />} />
           </div>
 
           {w.position && (
             <>
               <h3 className={s.h3}>Position</h3>
               <div className={s.stats}>
-                <Stat label="Wert" value={eur(w.position.value)} />
-                <Stat label="Einstand" value={eur(w.position.cost)} />
+                <Stat label="Wert" value={<Eur v={w.position.value} />} />
+                <Stat label="Einstand" value={<Eur v={w.position.cost} />} />
                 <Stat
                   label="Ergebnis"
-                  value={eur(w.position.pnl)}
+                  value={<Eur v={w.position.pnl} />}
                   tone={w.position.pnl >= 0 ? "up" : "down"}
                   sub={pct(w.position.pnlPct)}
                 />
-                <Stat label="Delta in Euro" value={eur(w.position.deltaEur)}
+                <Stat label="Delta in Euro" value={<Eur v={w.position.deltaEur} />}
                   sub="je 1 € im Basiswert" />
-                <Stat label="Theta in Euro" value={eur(w.position.thetaEur)}
+                <Stat label="Theta in Euro" value={<Eur v={w.position.thetaEur} />}
                   tone="down" sub="pro Kalendertag" />
-                <Stat label="Vega in Euro" value={eur(w.position.vegaEur)}
+                <Stat label="Vega in Euro" value={<Eur v={w.position.vegaEur} />}
                   sub="je Vola-Punkt" />
               </div>
               <p className={s.note}>
@@ -177,12 +178,12 @@ export default function Derivate() {
       {mode === "turbo" && (
         <>
           <div className={s.stats}>
-            <Stat label="Modellwert" value={eur(t.fair, 3)} />
-            <Stat label="Hebel" value={de(t.leverage, 2)} />
-            <Stat label="Abstand zur Barriere" value={pctPlain(t.distance, 1)} />
+            <Stat label="Modellwert" value={<Eur v={t.fair} d={3} />} />
+            <Stat label="Hebel" value={<Num v={t.leverage} d={2} />} />
+            <Stat label="Abstand zur Barriere" value={<PctPlain v={t.distance} d={1} />} />
             <Stat
               label="Berührung im Horizont"
-              value={pctPlain(t.touchProb, 1)}
+              value={<PctPlain v={t.touchProb} d={1} />}
               tone={t.touchProb > 0.4 ? "down" : undefined}
             />
             <Stat label="Status" value={t.knockedOut ? "ausgeknockt" : "aktiv"}
@@ -190,10 +191,10 @@ export default function Derivate() {
           </div>
           {t.position && (
             <div className={s.stats}>
-              <Stat label="Wert" value={eur(t.position.value)} />
-              <Stat label="Ergebnis" value={eur(t.position.pnl)}
+              <Stat label="Wert" value={<Eur v={t.position.value} />} />
+              <Stat label="Ergebnis" value={<Eur v={t.position.pnl} />}
                 tone={t.position.pnl >= 0 ? "up" : "down"} sub={pct(t.position.pnlPct)} />
-              <Stat label="Delta in Euro" value={eur(t.position.deltaEur)} />
+              <Stat label="Delta in Euro" value={<Eur v={t.position.deltaEur} />} />
             </div>
           )}
           <p className={s.note}>
@@ -220,7 +221,7 @@ function Field(props: {
   );
 }
 
-function Stat(props: { label: string; value: string; sub?: string; tone?: "up" | "down" }) {
+function Stat(props: { label: string; value: React.ReactNode; sub?: string; tone?: "up" | "down" }) {
   return (
     <div className={s.stat}>
       <span className={s.statLabel}>{props.label}</span>

@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import s from "./labor.module.css";
+import Methodik from "./Methodik";
 import Derivate from "./panels/Derivate";
 import Bewertung from "./panels/Bewertung";
 import StatArb from "./panels/StatArb";
@@ -27,6 +29,7 @@ const isTabKey = (v: string | null): v is TabKey => v !== null && (KEYS as reado
 export default function Labor() {
   const router = useRouter();
   const params = useSearchParams();
+  const reduce = useReducedMotion();
   const initial = params.get("k");
   const [tab, setTab] = useState<TabKey>(isTabKey(initial) ? initial : "derivate");
 
@@ -63,13 +66,27 @@ export default function Labor() {
         ))}
       </nav>
 
+      <div className={s.toolbar}>
+        <Methodik tab={tab} />
+      </div>
+
       <main className={s.stage}>
-        {tab === "derivate" && <Derivate />}
-        {tab === "bewertung" && <Bewertung />}
-        {tab === "statarb" && <StatArb />}
-        {tab === "sotp" && <Sotp />}
-        {tab === "filings" && <Filings />}
-        {tab === "brief" && <Brief />}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: reduce ? 0 : 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: reduce ? 0 : -6 }}
+            transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+          >
+            {tab === "derivate" && <Derivate />}
+            {tab === "bewertung" && <Bewertung />}
+            {tab === "statarb" && <StatArb />}
+            {tab === "sotp" && <Sotp />}
+            {tab === "filings" && <Filings />}
+            {tab === "brief" && <Brief />}
+          </motion.div>
+        </AnimatePresence>
       </main>
     </div>
   );

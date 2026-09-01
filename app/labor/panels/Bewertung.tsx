@@ -4,6 +4,7 @@ import { useState } from "react";
 import s from "../labor.module.css";
 import { valuation, type ValuationInput, type CapClass, type Cycle } from "@/lib/quant/valuation";
 import { de, pct, pctPlain, eur } from "@/lib/quant/num";
+import { Num, Eur, Pct, PctPlain } from "../Num";
 
 /**
  * Fünf-Methoden-Bewertung, live im Browser gerechnet. Bewusst ohne Verdikt:
@@ -63,15 +64,15 @@ export default function Bewertung() {
       </div>
 
       <div className={s.stats}>
-        <Stat label="Fairer Wert (gewichtet)" value={eur(r.fair)} />
-        <Stat label="Sicherheitsmarge (−25 %)" value={eur(r.marginOfSafety)} />
+        <Stat label="Fairer Wert (gewichtet)" value={<Eur v={r.fair} />} />
+        <Stat label="Sicherheitsmarge (−25 %)" value={<Eur v={r.marginOfSafety} />} />
         <Stat
           label="Abweichung vom Kurs"
-          value={pct(r.deviation / 100, 1)}
+          value={<Pct v={r.deviation / 100} d={1} />}
           tone={r.deviation >= 0 ? "up" : "down"}
         />
-        <Stat label="WACC" value={pctPlain(r.wacc, 2)} />
-        <Stat label="Zyklusfaktor" value={de(r.cycleFactor, 2)} />
+        <Stat label="WACC" value={<PctPlain v={r.wacc} d={2} />} />
+        <Stat label="Zyklusfaktor" value={<Num v={r.cycleFactor} d={2} />} />
         <Stat
           label="Zuverlässigkeit"
           value={`${RELIABILITY_LABEL[r.reliability]} · ${r.activeCount}/5`}
@@ -95,7 +96,7 @@ export default function Bewertung() {
           <Stat
             key={m.name}
             label={m.name}
-            value={m.ok ? eur(m.value) : "—"}
+            value={m.ok ? <Eur v={m.value} /> : "—"}
             sub={m.ok ? `Gewicht ${de(m.weight * 100, 0)} %` : m.why}
             tone={m.ok && f.price > 0 ? (m.value >= f.price ? "up" : "down") : undefined}
           />
@@ -177,7 +178,7 @@ function Select(props: { label: string; value: string; options: string[]; onChan
   );
 }
 
-function Stat(props: { label: string; value: string; sub?: string; tone?: "up" | "down" }) {
+function Stat(props: { label: string; value: React.ReactNode; sub?: string; tone?: "up" | "down" }) {
   return (
     <div className={s.stat}>
       <span className={s.statLabel}>{props.label}</span>
