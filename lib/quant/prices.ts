@@ -33,14 +33,37 @@ export interface OHLC {
   v?: number;
 }
 
+/** Eine Kursreihe samt Notierungswährung (z. B. EUR, USD, GBp = Pence). */
+export interface Series {
+  ohlc: OHLC[];
+  currency: string;
+}
+
 function rangeFor(days: number): string {
   return days <= 260 ? "1y" : days <= 520 ? "2y" : days <= 1300 ? "5y" : "10y";
+}
+
+/** Notierungswährung aus dem Yahoo-Suffix (Fallback, wenn Yahoo keine liefert). */
+const CUR_BY_SUFFIX: Record<string, string> = {
+  ".DE": "EUR", ".AS": "EUR", ".PA": "EUR", ".MI": "EUR", ".MC": "EUR",
+  ".BR": "EUR", ".LS": "EUR", ".VI": "EUR", ".F": "EUR", ".HE": "EUR", ".IR": "EUR",
+  ".L": "GBp", ".SW": "CHF", ".ST": "SEK", ".OL": "NOK", ".CO": "DKK",
+  ".TO": "CAD", ".V": "CAD", ".HK": "HKD", ".T": "JPY", ".AX": "AUD",
+};
+export function currencyFromSuffix(sym: string): string {
+  const u = sym.toUpperCase();
+  if (u.startsWith("^")) return "";                 // Index: Punkte, keine Währung
+  if (u.endsWith("-EUR")) return "EUR";
+  if (/-(USD|USDT)$/.test(u)) return "USD";
+  const dot = u.lastIndexOf(".");
+  if (dot >= 0) return CUR_BY_SUFFIX[u.slice(dot)] ?? "EUR";
+  return "USD";                                     // ohne Suffix: US-Titel
 }
 
 /* ---------- Yahoo ---------- */
 
 /** Roh-Chart von Yahoo für beliebiges range/interval (Tages- wie Intraday). */
-async function yahooChart(sym: string, range: string, interval: string): Promise<OHLC[]> {
+async function yahooChart(sym: string, range: string, interval: string): Promise<Series> {
   const url =
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}` +
     `?range=${range}&interval=${interval}`;
@@ -55,6 +78,7 @@ async function yahooChart(sym: string, range: string, interval: string): Promise
 
   const json = (await res.json()) as {
     chart?: { result?: Array<{
+      meta?: { currency?: string };
       timestamp?: number[];
       indicators?: { quote?: Array<{
         open?: (number | null)[]; high?: (number | null)[];
@@ -73,11 +97,12 @@ async function yahooChart(sym: string, range: string, interval: string): Promise
     }
   }
   if (out.length === 0) throw new Error("Yahoo leer");
-  return out;
+  return { ohlc: out, currency: r?.meta?.currency || currencyFromSuffix(sym) };
 }
 
-async function yahooCandles(sym: string, days: number): Promise<OHLC[]> {
-  return (await yahooChart(sym, rangeFor(days), "1d")).slice(-days);
+async function yahooCandles(sym: string, days: number): Promise<Series> {
+  const s = await yahooChart(sym, rangeFor(days), "1d");
+  return { ohlc: s.ohlc.slice(-days), currency: s.currency };
 }
 
 /* ---------- Stooq (Fallback) ---------- */
@@ -104,7 +129,7 @@ function toStooq(sym: string): string | null {
   return null;
 }
 
-async function stooqCandles(sym: string, days: number): Promise<OHLC[]> {
+async function stooqCandles(sym: string, days: number): Promise<Series> {
   const s = toStooq(sym);
   if (!s) throw new Error(`Stooq kennt ${sym} nicht.`);
   const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(s)}&i=d`;
@@ -128,13 +153,13 @@ async function stooqCandles(sym: string, days: number): Promise<OHLC[]> {
     }
   }
   if (out.length === 0) throw new Error(`Stooq-CSV leer für ${s}.`);
-  return out.slice(-days);
+  return { ohlc: out.slice(-days), currency: currencyFromSuffix(sym) };
 }
 
 /* ---------- Öffentliche API ---------- */
 
-/** Vollständige OHLC-Kerzen eines Titels, älteste zuerst. Yahoo, dann Stooq. */
-export async function candles(symbol: string, days = 750): Promise<OHLC[]> {
+/** Vollständige Kursreihe (mit Währung) eines Titels. Yahoo, dann Stooq. */
+export async function candlesSeries(symbol: string, days = 750): Promise<Series> {
   const sym = normTicker(symbol);
   try {
     return await yahooCandles(sym, days);
@@ -143,18 +168,23 @@ export async function candles(symbol: string, days = 750): Promise<OHLC[]> {
   }
 }
 
+/** Nur die OHLC-Kerzen — für die Rechenkerne, die keine Währung brauchen. */
+export async function candles(symbol: string, days = 750): Promise<OHLC[]> {
+  return (await candlesSeries(symbol, days)).ohlc;
+}
+
 /** Erlaubte Intraday-Auflösungen (Yahoo). */
 const INTRADAY_INTERVALS = new Set(["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h"]);
 const INTRADAY_RANGES = new Set(["1d", "5d", "1mo"]);
 
 /**
- * Intraday-Kerzen (Minuten/Stunden). Nur über Yahoo — Stooq führt keine
- * Intraday-Daten. Auf Rechenzentrums-IPs (Vercel) kann Yahoo blocken; lokal
- * funktioniert es. Wirft bei Ausfall, damit die UI sauber darauf reagieren kann.
+ * Intraday-Kerzen (Minuten/Stunden) samt Währung. Nur über Yahoo — Stooq führt
+ * keine Intraday-Daten. Auf Rechenzentrums-IPs (Vercel) kann Yahoo blocken;
+ * lokal funktioniert es. Wirft bei Ausfall, damit die UI reagieren kann.
  */
-export async function intradayCandles(
+export async function intradaySeries(
   symbol: string, range = "1d", interval = "5m",
-): Promise<OHLC[]> {
+): Promise<Series> {
   const sym = normTicker(symbol);
   const r = INTRADAY_RANGES.has(range) ? range : "1d";
   const iv = INTRADAY_INTERVALS.has(interval) ? interval : "5m";

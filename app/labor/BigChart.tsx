@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import s from "./chartview.module.css";
-import { de, eur } from "@/lib/quant/num";
+import { de, money } from "@/lib/quant/num";
 
 export interface Ohlc { t?: number; o: number; h: number; l: number; c: number; }
 
@@ -24,12 +24,14 @@ export default function BigChart({
   data,
   candles,
   times,
+  currency = "EUR",
   intraday = false,
   mode = "line",
 }: {
   data: number[];
   candles?: Ohlc[];
   times?: number[];
+  currency?: string;
   intraday?: boolean;
   mode?: "line" | "candles";
 }) {
@@ -146,8 +148,8 @@ export default function BigChart({
             const bh = Math.max(1, Math.abs(yC - yO));
             return (
               <g key={i} stroke={col} fill={col}>
-                <line x1={cx} x2={cx} y1={geo.y(c.h)} y2={geo.y(c.l)} strokeWidth="1" />
-                <rect x={cx - bw / 2} y={top} width={bw} height={bh} rx="0.5" />
+                <line x1={cx} x2={cx} y1={geo.y(c.h)} y2={geo.y(c.l)} strokeWidth={Math.min(1.6, Math.max(1, bw * 0.16))} strokeLinecap="round" />
+                <rect x={cx - bw / 2} y={top} width={bw} height={bh} rx="1" />
               </g>
             );
           })
@@ -170,7 +172,7 @@ export default function BigChart({
       </svg>
       {hv != null && (
         <div className={s.readout} style={{ left: Math.min(hx + 12, geo.w - 150) }}>
-          <span className={s.readoutPrice}>{eur(hv)}</span>
+          <span className={s.readoutPrice}>{money(hv, currency)}</span>
           <span className={s.readoutDay}>
             {times && times[hover ?? 0] != null
               ? fmtStamp(times[hover ?? 0], intraday)

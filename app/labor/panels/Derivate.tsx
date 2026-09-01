@@ -22,6 +22,40 @@ export default function Derivate() {
     quantity: 111, entry: 1.409, market: 0, barrier: 0,
   });
 
+  // WKN/ISIN: Konditionen auf Wunsch aus einer Datenquelle ziehen (siehe
+  // /api/quant/instrument). Ohne angebundene Quelle bleibt die Eingabe manuell.
+  const [ident, setIdent] = useState("");
+  const [identBusy, setIdentBusy] = useState(false);
+  const [identMsg, setIdentMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [loaded, setLoaded] = useState<string | null>(null);
+
+  async function resolveIdent() {
+    const id = ident.trim().toUpperCase();
+    if (!id) return;
+    setIdentBusy(true); setIdentMsg(null);
+    try {
+      const r = await fetch(`/api/quant/instrument?id=${encodeURIComponent(id)}`);
+      const j = await r.json();
+      if (!j.ok) { setIdentMsg({ ok: false, text: j.error || "Abruf fehlgeschlagen." }); setLoaded(null); return; }
+      const d = j.data ?? {};
+      setF((prev) => ({
+        ...prev,
+        spot: Number.isFinite(d.spot) ? d.spot : prev.spot,
+        strike: Number.isFinite(d.strike) ? d.strike : prev.strike,
+        days: Number.isFinite(d.days) ? d.days : prev.days,
+        ratio: Number.isFinite(d.ratio) ? d.ratio : prev.ratio,
+        vol: Number.isFinite(d.vol) ? d.vol : prev.vol,
+        rate: Number.isFinite(d.rate) ? d.rate : prev.rate,
+        type: d.type === "call" || d.type === "put" ? d.type : prev.type,
+        barrier: Number.isFinite(d.barrier) ? d.barrier : prev.barrier,
+      }));
+      setLoaded(`${j.kind} ${j.id}`);
+      setIdentMsg({ ok: true, text: `Konditionen aus ${j.kind} ${j.id} übernommen.` });
+    } catch {
+      setIdentMsg({ ok: false, text: "Keine Verbindung zur Datenquelle." }); setLoaded(null);
+    } finally { setIdentBusy(false); }
+  }
+
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF({ ...f, [k]: e.target.value === "" ? 0 : Number(e.target.value) });
 
@@ -60,6 +94,22 @@ export default function Derivate() {
           Turbo / Knock-out
         </button>
       </div>
+
+      <div className={s.identRow}>
+        <label className={s.field} style={{ flex: "1 1 240px" }}>
+          <span>WKN / ISIN {loaded && <span className={s.identBadge}>{loaded}</span>}</span>
+          <input
+            value={ident}
+            placeholder="z. B. SG1A2B oder DE000SG1A2B3"
+            onChange={(e) => setIdent(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === "Enter" && resolveIdent()}
+          />
+        </label>
+        <button className={s.ghost} onClick={resolveIdent} disabled={identBusy || !ident.trim()}>
+          {identBusy ? "fragt ab …" : "Konditionen abrufen"}
+        </button>
+      </div>
+      {identMsg && <p className={identMsg.ok ? s.note : s.warn}>{identMsg.text}</p>}
 
       <div className={s.grid}>
         <Field label="Kurs Basiswert" value={f.spot} onChange={set("spot")} step="0.01" />

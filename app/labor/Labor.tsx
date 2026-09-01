@@ -12,6 +12,7 @@ import Werkzeuge from "./Werkzeuge";
 
 type View = "charts" | "werkzeuge";
 const STORE = "equilux-view-v1";
+const RAIL_STORE = "equilux-rail-v1";
 const KERNE = ["derivate", "bewertung", "statarb", "sotp", "filings", "brief"];
 
 export default function Labor() {
@@ -22,8 +23,13 @@ export default function Labor() {
   const [focus, setFocus] = useState<string | null>("SAP.DE");
   const [view, setView] = useState<View>(wantsKern ? "werkzeuge" : "charts");
   const [focusModule, setFocusModule] = useState<string | null>(wantsKern);
+  const [railOpen, setRailOpen] = useState(true);
 
   useEffect(() => {
+    try {
+      const r = localStorage.getItem(RAIL_STORE);
+      if (r === "0") setRailOpen(false);
+    } catch { /* egal */ }
     // Direktlink zu einer Rechnung (?k=…) hat Vorrang vor der gespeicherten Ansicht.
     if (wantsKern) return;
     try {
@@ -36,6 +42,11 @@ export default function Labor() {
     } catch { /* egal */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const toggleRail = (open: boolean) => {
+    setRailOpen(open);
+    try { localStorage.setItem(RAIL_STORE, open ? "1" : "0"); } catch { /* egal */ }
+  };
 
   const persist = (v: View, f: string | null) => {
     try { localStorage.setItem(STORE, JSON.stringify({ view: v, focus: f })); } catch { /* egal */ }
@@ -54,9 +65,7 @@ export default function Labor() {
         </div>
       </header>
 
-      <div className={s.body}>
-        <WatchlistRail focus={focus} onFocus={onFocus} />
-
+      <div className={`${s.body} ${railOpen ? "" : s.bodyRailClosed}`}>
         <div className={s.mainCol}>
           <div className={s.viewBar}>
             <div className={s.vSwitch} role="tablist" aria-label="Ansicht">
@@ -71,6 +80,15 @@ export default function Labor() {
 
           {view === "charts" ? <ChartView focus={focus} /> : <Werkzeuge focusModule={focusModule} />}
         </div>
+
+        {railOpen ? (
+          <WatchlistRail focus={focus} onFocus={onFocus} onCollapse={() => toggleRail(false)} />
+        ) : (
+          <button className={s.railReopen} onClick={() => toggleRail(true)} title="Watchlist einblenden" aria-label="Watchlist einblenden">
+            <span className={s.railReopenIcon}>❮</span>
+            <span className={s.railReopenText}>Watchlist</span>
+          </button>
+        )}
       </div>
     </div>
   );

@@ -12,6 +12,14 @@
 .chartView { display: flex; flex-direction: column; gap: 14px; }
 .cvBar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .cvBar .grow { margin-left: auto; }
+.fsBtn { border: 1px solid var(--border); border-radius: 8px; margin-left: 10px; }
+
+/* Vollbild: über den ganzen Bildschirm, Chrome ausgeblendet. */
+.fsOn {
+  position: fixed; inset: 0; z-index: 200; margin: 0;
+  background: var(--bg); padding: 14px 18px; overflow: auto;
+}
+.fsOn .cvGrid { height: calc(100vh - 96px); min-height: 0; }
 .switch { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .swBtn { background: var(--surface); border: 0; padding: 7px 13px; color: var(--text-dim); font: 500 12px/1 var(--font-mono-stack); cursor: pointer; transition: color .15s var(--ease-out), background-color .15s var(--ease-out); }
 .swBtn:hover { color: var(--text); }

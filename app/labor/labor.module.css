@@ -95,8 +95,9 @@
 .emptyTitle { font-size: 17px; font-weight: 600; color: var(--ink); margin: 0 0 8px; }
 .emptyText { color: var(--dim); font-size: 14px; margin: 0; }
 
-/* Körper: Watchlist-Seitenspalte + Hauptbereich */
-.body { display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 22px; align-items: start; }
+/* Körper: Hauptbereich links, Watchlist-Seitenspalte rechts (einklappbar) */
+.body { display: grid; grid-template-columns: minmax(0, 1fr) 288px; gap: 22px; align-items: start; }
+.bodyRailClosed { grid-template-columns: minmax(0, 1fr) 44px; }
 
 .rail {
   position: sticky; top: 78px; align-self: start;
@@ -104,7 +105,27 @@
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 14px;
 }
-.railTitle { font: 500 10px/1 var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-faint); margin: 2px 4px 12px; }
+.railTop { display: flex; align-items: center; justify-content: space-between; margin: 2px 2px 12px; }
+.railTitle { font: 500 10px/1 var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-faint); margin: 0 2px; }
+.railCollapse {
+  background: transparent; border: 1px solid var(--border); border-radius: 7px; cursor: pointer;
+  color: var(--text-faint); font-size: 12px; line-height: 1; padding: 5px 8px;
+  transition: color 0.15s var(--ease-out), border-color 0.15s var(--ease-out);
+}
+.railCollapse:hover { color: var(--text); border-color: var(--accent); }
+
+/* Schmaler Wieder-Einblenden-Reiter, wenn die Watchlist zu ist */
+.railReopen {
+  position: sticky; top: 78px; align-self: start;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  width: 44px; height: 168px; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); color: var(--text-dim);
+  transition: color 0.15s var(--ease-out), border-color 0.15s var(--ease-out);
+}
+.railReopen:hover { color: var(--text); border-color: var(--accent); }
+.railReopenIcon { font-size: 13px; line-height: 1; }
+.railReopenText { writing-mode: vertical-rl; font: 500 10px/1 var(--mono); letter-spacing: 0.18em; text-transform: uppercase; }
 .railAdd { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
 .railAddRow { display: flex; gap: 7px; }
 .railInput { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: var(--text); font: 400 12.5px/1.2 var(--mono); text-transform: uppercase; }
@@ -140,8 +161,10 @@
 .vOn { background: var(--surface-2); color: var(--text); }
 
 @media (max-width: 900px) {
-  .body { grid-template-columns: 1fr; }
+  .body, .bodyRailClosed { grid-template-columns: 1fr; }
   .rail { position: static; max-height: none; }
+  .railReopen { position: static; width: 100%; height: auto; flex-direction: row; padding: 10px; }
+  .railReopenText { writing-mode: horizontal-tb; }
 }
 
 .stage { min-height: 320px; position: relative; }
@@ -157,6 +180,8 @@
 
 /* Eingaben */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 22px; }
+.identRow { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 14px; }
+.identBadge { font: 500 9.5px/1 var(--mono); letter-spacing: .06em; color: var(--gold); border: 1px solid var(--line); border-radius: 4px; padding: 2px 5px; margin-left: 8px; }
 .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 14px; }
 .field { display: flex; flex-direction: column; gap: 5px; min-width: 150px; }
 .wide { flex: 1 1 320px; }
@@ -247,7 +272,8 @@
 .filing { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; margin-bottom: 8px; }
 .filingHead { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 5px; }
 .filingName { font-weight: 500; }
-.filingCtx { font-size: 12px; color: var(--dim); margin: 0; line-height: 1.5; }
+.filingCtx { font-size: 13px; color: var(--ink); margin: 0 0 4px; line-height: 1.5; }
+.filingQuote { font-size: 11.5px; color: var(--faint); margin: 0; line-height: 1.5; font-style: italic; }
 
 /* Marktbrief */
 .brief { margin-top: 6px; }

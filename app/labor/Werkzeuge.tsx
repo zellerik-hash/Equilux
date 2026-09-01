@@ -22,10 +22,13 @@ const REGISTRY: Record<Key, { kicker: string; name: string; Comp: React.Componen
   brief: { kicker: "Marktbrief", name: "Session-Briefing", Comp: Brief },
 };
 const ALL: Key[] = ["derivate", "bewertung", "statarb", "sotp", "filings", "brief"];
-const STORE = "equilux-werkzeuge-v1";
+// Schlanke Startauswahl — der Rest wird über die Palette bei Bedarf zugeschaltet,
+// damit die Ansicht nicht von Anfang an überfüllt ist.
+const DEFAULT: Key[] = ["derivate", "bewertung"];
+const STORE = "equilux-werkzeuge-v2";
 
 export default function Werkzeuge({ focusModule }: { focusModule?: string | null }) {
-  const [order, setOrder] = useState<Key[]>(ALL);
+  const [order, setOrder] = useState<Key[]>(DEFAULT);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const refs = useRef<Record<string, HTMLElement | null>>({});
 
@@ -57,7 +60,7 @@ export default function Werkzeuge({ focusModule }: { focusModule?: string | null
   const addMod = (k: Key) => { const n = [...order, k]; setOrder(n); persist(n, collapsed); };
   const remove = (k: Key) => { const n = order.filter((x) => x !== k); setOrder(n); persist(n, collapsed); };
   const toggle = (k: Key) => { const c = { ...collapsed, [k]: !collapsed[k] }; setCollapsed(c); persist(order, c); };
-  const reset = () => { setOrder(ALL); setCollapsed({}); persist(ALL, {}); };
+  const reset = () => { setOrder(DEFAULT); setCollapsed({}); persist(DEFAULT, {}); };
 
   const available = ALL.filter((k) => !order.includes(k));
 

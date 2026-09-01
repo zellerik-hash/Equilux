@@ -39,9 +39,11 @@ function detectCat(sym: string): CatKey {
 export default function WatchlistRail({
   focus,
   onFocus,
+  onCollapse,
 }: {
   focus: string | null;
   onFocus: (sym: string) => void;
+  onCollapse?: () => void;
 }) {
   const [items, setItems] = useState<Item[]>(DEFAULT);
   const [draft, setDraft] = useState("");
@@ -85,7 +87,12 @@ export default function WatchlistRail({
 
   return (
     <aside className={s.rail}>
-      <div className={s.railTitle}>Watchlist</div>
+      <div className={s.railTop}>
+        <div className={s.railTitle}>Watchlist</div>
+        {onCollapse && (
+          <button className={s.railCollapse} onClick={onCollapse} title="Watchlist einklappen" aria-label="Watchlist einklappen">❯</button>
+        )}
+      </div>
       <div className={s.railAdd}>
         <input
           className={s.railInput}

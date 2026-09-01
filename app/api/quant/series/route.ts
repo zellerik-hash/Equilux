@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { candles, intradayCandles } from "@/lib/quant/prices";
+import { candlesSeries, intradaySeries } from "@/lib/quant/prices";
 
 export const runtime = "nodejs";
 
@@ -23,9 +23,9 @@ export async function GET(req: Request) {
   const days = Number.isFinite(daysRaw) ? Math.max(20, Math.min(2000, daysRaw)) : 180;
 
   try {
-    const ohlc = interval
-      ? await intradayCandles(symbol, range ?? "1d", interval)
-      : await candles(symbol, days);
+    const { ohlc, currency } = interval
+      ? await intradaySeries(symbol, range ?? "1d", interval)
+      : await candlesSeries(symbol, days);
     if (ohlc.length < 2) {
       return NextResponse.json({ ok: false, error: "Zu wenige Kursdaten" }, { status: 422 });
     }
@@ -33,6 +33,7 @@ export async function GET(req: Request) {
       ok: true,
       data: {
         symbol,
+        currency,
         intraday: !!interval,
         t: ohlc.map((c) => c.t),
         closes: ohlc.map((c) => c.c),

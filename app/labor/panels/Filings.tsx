@@ -5,6 +5,15 @@ import s from "../labor.module.css";
 import { de, pctPlain } from "@/lib/quant/num";
 import type { EdgarResult } from "@/lib/quant/edgar";
 
+/** Klartext-Einordnung eines Abnehmers auf Deutsch. */
+function deSatz(c: { name: string | null; share: number | null }): string {
+  const name = c.name ?? "Ein nicht namentlich genannter Abnehmer";
+  if (c.share !== null) {
+    return `${name} steht für rund ${de(c.share * 100, 1)} % des ausgewiesenen Umsatzes.`;
+  }
+  return `${name} wird als wesentlicher Abnehmer genannt — ohne beziffertem Anteil.`;
+}
+
 export default function Filings() {
   const [ticker, setTicker] = useState("NVDA");
   const [busy, setBusy] = useState(false);
@@ -50,10 +59,16 @@ export default function Filings() {
 
           {res.available && (
             <>
+              <p className={s.note}>
+                Automatisch aus dem jüngsten Jahresbericht (10-K) herausgelesene Stellen zur
+                <b> Kundenkonzentration</b> — also wie stark der Umsatz an einzelnen Abnehmern hängt.
+                Klumpenrisiko, das in keiner Bewertungskennzahl auftaucht.
+              </p>
+
               <div className={s.stats}>
                 <Stat label="Formular" value={res.form ?? "—"} />
                 <Stat label="Eingereicht" value={res.filed ?? "—"} />
-                <Stat label="Nennungen" value={String(res.customers.length)} />
+                <Stat label="Genannte Abnehmer" value={String(res.customers.length)} />
                 <Stat label="Größter Einzelanteil"
                   value={res.topShare === null ? "—" : pctPlain(res.topShare, 1)}
                   tone={res.topShare !== null && res.topShare > 0.2 ? "down" : undefined} big />
@@ -73,7 +88,8 @@ export default function Filings() {
                     <span className={s.filingName}>{c.name ?? "ohne Namensnennung"}</span>
                     <span className={s.mono}>{c.share === null ? "—" : de(c.share * 100, 1) + " %"}</span>
                   </div>
-                  <p className={s.filingCtx}>… {c.context} …</p>
+                  <p className={s.filingCtx}>{deSatz(c)}</p>
+                  <p className={s.filingQuote}>Originalstelle: „… {c.context} …"</p>
                 </div>
               ))}
 
@@ -81,9 +97,10 @@ export default function Filings() {
                 <p className={s.note}>
                   Quelle: <a href={res.url} target="_blank" rel="noopener noreferrer">
                     Originalfiling bei der SEC
-                  </a>. Die Muster greifen englische Standardformulierungen ab — ungewöhnlich
-                  formulierte Angaben können durchrutschen. Bei einer Position, die daran hängt,
-                  gehört das Filing selbst gelesen.
+                  </a>. Die deutschen Sätze sind eine automatische Einordnung; die kursive
+                  Originalstelle bleibt als englischer Beleg stehen. Die Muster greifen englische
+                  Standardformulierungen ab — ungewöhnlich formulierte Angaben können durchrutschen.
+                  Bei einer Position, die daran hängt, gehört das Filing selbst gelesen.
                 </p>
               )}
             </>

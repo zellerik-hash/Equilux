@@ -164,6 +164,23 @@ export function eur(value: number, digits = 2): string {
   return Number.isFinite(value) ? `${de(value, digits)} €` : "k. A.";
 }
 
+/** Währungssymbole; unbekannte Codes werden als Kürzel angehängt. */
+const CUR_SYM: Record<string, string> = {
+  EUR: "€", USD: "$", GBP: "£", GBp: "p", CHF: "CHF", JPY: "¥",
+  CAD: "C$", AUD: "A$", HKD: "HK$", SEK: "kr", NOK: "kr", DKK: "kr",
+};
+
+/**
+ * Betrag in der Notierungswährung, deutsch formatiert (Symbol nachgestellt).
+ * `GBp` = britische Pence. Ohne Währung (z. B. Indizes) nur die Zahl.
+ */
+export function money(value: number, currency = "EUR", digits = 2): string {
+  if (!Number.isFinite(value)) return "k. A.";
+  const num = de(value, digits);
+  if (!currency) return num;
+  return `${num} ${CUR_SYM[currency] ?? currency}`;
+}
+
 /** Auf n Stellen runden, ohne Gleitkomma-Rauschen weiterzuschleppen. */
 export const round = (v: number, n = 6): number =>
   Number.isFinite(v) ? Number(v.toFixed(n)) : v;
