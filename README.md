@@ -99,6 +99,24 @@ landet je im Client — Marktbrief und EDGAR laufen serverseitig
 
 ---
 
+## Deploy (Vercel)
+
+EQUILUX ist ein Standard-Next.js-14-Projekt und läuft auf Vercel ohne
+Zusatzkonfiguration:
+
+1. Repo auf [vercel.com/new](https://vercel.com/new) importieren (GitHub
+   verbinden, `Equilux` wählen).
+2. Optionale Umgebungsvariablen setzen (Project → Settings → Environment
+   Variables), siehe `.env.example`:
+   - `ANTHROPIC_API_KEY` — nur für den Marktbrief-Kern
+   - `SEC_USER_AGENT` — für den Filings-Kern (SEC EDGAR)
+3. **Deploy.** Build-Command (`next build`) und Framework erkennt Vercel
+   automatisch.
+
+Ohne Variablen funktioniert alles außer Marktbrief; die Kurscharts, Stat-Arb
+und Filings ziehen live von Yahoo/SEC, sobald die Umgebung Netz nach außen
+erlaubt (lokal und auf Vercel gegeben).
+
 ## Tests
 
 ```

@@ -49,6 +49,9 @@
 .slotInput:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .demoBtn { background: transparent; border: 1px dashed var(--border-strong); color: var(--text-dim); border-radius: 7px; padding: 6px 11px; font: 500 11.5px/1 var(--font-mono-stack); cursor: pointer; }
 .demoBtn:hover { color: var(--text); border-color: var(--newyork); }
+.pickRow { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 320px; }
+.pickChip { background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim); border-radius: 999px; padding: 5px 11px; font: 500 11.5px/1 var(--font-mono-stack); cursor: pointer; transition: color .14s var(--ease-out), border-color .14s var(--ease-out); }
+.pickChip:hover { color: var(--text); border-color: var(--accent); }
 .stateText { color: var(--text-dim); font-size: 12.5px; }
 
 @media (max-width: 900px) {

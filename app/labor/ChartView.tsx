@@ -2,18 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import s from "./chartview.module.css";
-import BigChart from "./BigChart";
+import BigChart, { type Ohlc } from "./BigChart";
 import Logo from "./Logo";
 import { metaFor } from "./symbols";
 import { de, eur, pct } from "@/lib/quant/num";
 
 /**
  * Bildschirmfüllende Chart-Ansicht à la TradingView: ein großer Chart, oder
- * 2 bzw. 4 nebeneinander. Ein Klick in der Watchlist setzt den aktiven Slot.
- * Kursreihen kommen serverseitig von Yahoo; ohne Netz je Slot eine klar
- * gekennzeichnete Demo-Reihe.
+ * 2 bzw. 4 nebeneinander. Linie oder Kerzen. Ein Klick in der Watchlist setzt
+ * den aktiven Slot; ein leerer Slot bietet die Watchlist zum Zuweisen.
  */
 const STORE = "equilux-chartview-v1";
+const WATCH = "equilux-watch-v2";
 const TFS = [
   { label: "1M", days: 30 },
   { label: "6M", days: 180 },
@@ -22,10 +22,11 @@ const TFS = [
 ];
 const LAYOUTS = [1, 2, 4] as const;
 type Layout = (typeof LAYOUTS)[number];
+type Mode = "line" | "candles";
 
-interface Cell { loading?: boolean; closes?: number[]; error?: string; demo?: boolean; }
+interface Cell { loading?: boolean; closes?: number[]; ohlc?: Ohlc[]; error?: string; demo?: boolean; }
 
-function demoSeries(sym: string, days: number): number[] {
+function demoCloses(sym: string, days: number): number[] {
   let seed = 0;
   for (let i = 0; i < sym.length; i++) seed = (seed * 31 + sym.charCodeAt(i)) >>> 0;
   const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
@@ -35,14 +36,24 @@ function demoSeries(sym: string, days: number): number[] {
   for (let i = 0; i < cap; i++) { p *= 1 + (rnd() - 0.49) * 0.02; out.push(Math.round(p * 100) / 100); }
   return out;
 }
+function toOhlc(closes: number[]): Ohlc[] {
+  return closes.map((c, i) => {
+    const o = i === 0 ? c : closes[i - 1];
+    const hi = Math.max(o, c) * 1.006;
+    const lo = Math.min(o, c) * 0.994;
+    return { o: Math.round(o * 100) / 100, h: Math.round(hi * 100) / 100, l: Math.round(lo * 100) / 100, c };
+  });
+}
 
 export default function ChartView({ focus }: { focus: string | null }) {
   const [layout, setLayout] = useState<Layout>(1);
+  const [mode, setMode] = useState<Mode>("line");
   const [slots, setSlots] = useState<string[]>(["SAP.DE", "ASML.AS", "SHEL.L", "AAPL"]);
   const [active, setActive] = useState(0);
   const [days, setDays] = useState(180);
   const [cache, setCache] = useState<Record<string, Cell>>({});
   const [draft, setDraft] = useState("");
+  const [watch, setWatch] = useState<string[]>([]);
   const inflight = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -51,24 +62,35 @@ export default function ChartView({ focus }: { focus: string | null }) {
       if (raw) {
         const o = JSON.parse(raw);
         if (o.layout === 1 || o.layout === 2 || o.layout === 4) setLayout(o.layout);
+        if (o.mode === "line" || o.mode === "candles") setMode(o.mode);
         if (Array.isArray(o.slots)) setSlots((prev) => prev.map((v, i) => o.slots[i] ?? v));
         if (typeof o.days === "number") setDays(o.days);
       }
     } catch { /* egal */ }
   }, []);
 
-  const persist = (l: Layout, sl: string[], d: number) => {
-    try { localStorage.setItem(STORE, JSON.stringify({ layout: l, slots: sl, days: d })); } catch { /* egal */ }
+  const readWatch = () => {
+    try {
+      const raw = localStorage.getItem(WATCH);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) setWatch(arr.map((x: { symbol?: string }) => String(x.symbol ?? "").toUpperCase()).filter(Boolean));
+      }
+    } catch { /* egal */ }
+  };
+  useEffect(() => { readWatch(); }, [focus]);
+
+  const persist = (l: Layout, sl: string[], d: number, m: Mode) => {
+    try { localStorage.setItem(STORE, JSON.stringify({ layout: l, slots: sl, days: d, mode: m })); } catch { /* egal */ }
   };
 
-  // Watchlist-Klick füllt den aktiven Slot.
   useEffect(() => {
     if (!focus) return;
     setSlots((sl) => {
       if (sl[active] === focus) return sl;
       const next = [...sl];
       next[active] = focus;
-      persist(layout, next, days);
+      persist(layout, next, days, mode);
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,7 +108,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
       setCache((c) => ({ ...c, [k]: { loading: true } }));
       fetch(`/api/quant/series?symbol=${encodeURIComponent(sym)}&days=${days}`)
         .then((r) => r.json())
-        .then((j) => setCache((c) => ({ ...c, [k]: j.ok ? { closes: j.data.closes } : { error: j.error || "Abruf fehlgeschlagen" } })))
+        .then((j) => setCache((c) => ({ ...c, [k]: j.ok ? { closes: j.data.closes, ohlc: j.data.ohlc } : { error: j.error || "Abruf fehlgeschlagen" } })))
         .catch(() => setCache((c) => ({ ...c, [k]: { error: "Keine Verbindung" } })))
         .finally(() => inflight.current.delete(k));
     });
@@ -95,12 +117,16 @@ export default function ChartView({ focus }: { focus: string | null }) {
   const setSlot = (i: number, sym: string) => {
     const next = [...slots];
     next[i] = sym.trim().toUpperCase();
-    setSlots(next); persist(layout, next, days);
+    setSlots(next); persist(layout, next, days, mode);
   };
   const clearSlot = (i: number) => setSlot(i, "");
-  const chooseLayout = (l: Layout) => { setLayout(l); persist(l, slots, days); if (active >= l) setActive(0); };
-  const chooseTf = (d: number) => { setDays(d); persist(layout, slots, d); };
-  const loadDemo = (sym: string) => setCache((c) => ({ ...c, [keyOf(sym)]: { demo: true, closes: demoSeries(sym, days) } }));
+  const chooseLayout = (l: Layout) => { setLayout(l); persist(l, slots, days, mode); if (active >= l) setActive(0); };
+  const chooseTf = (d: number) => { setDays(d); persist(layout, slots, d, mode); };
+  const chooseMode = (m: Mode) => { setMode(m); persist(layout, slots, days, m); };
+  const loadDemo = (sym: string) => {
+    const cl = demoCloses(sym, days);
+    setCache((c) => ({ ...c, [keyOf(sym)]: { demo: true, closes: cl, ohlc: toOhlc(cl) } }));
+  };
 
   const cols = layout === 1 ? "1fr" : "1fr 1fr";
 
@@ -110,18 +136,19 @@ export default function ChartView({ focus }: { focus: string | null }) {
         <span className={s.swLabel}>Layout</span>
         <div className={s.switch} role="group" aria-label="Chart-Layout">
           {LAYOUTS.map((l) => (
-            <button key={l} className={`${s.swBtn} ${layout === l ? s.swOn : ""}`} onClick={() => chooseLayout(l)}>
-              {l === 1 ? "1" : l === 2 ? "2" : "4"}
-            </button>
+            <button key={l} className={`${s.swBtn} ${layout === l ? s.swOn : ""}`} onClick={() => chooseLayout(l)}>{l}</button>
           ))}
+        </div>
+        <span className={s.swLabel} style={{ marginLeft: 8 }}>Typ</span>
+        <div className={s.switch} role="group" aria-label="Chart-Typ">
+          <button className={`${s.swBtn} ${mode === "line" ? s.swOn : ""}`} onClick={() => chooseMode("line")}>Linie</button>
+          <button className={`${s.swBtn} ${mode === "candles" ? s.swOn : ""}`} onClick={() => chooseMode("candles")}>Kerzen</button>
         </div>
         <div className={s.grow} />
         <span className={s.swLabel}>Zeitraum</span>
         <div className={s.switch} role="group" aria-label="Zeitraum">
           {TFS.map((t) => (
-            <button key={t.days} className={`${s.swBtn} ${days === t.days ? s.swOn : ""}`} onClick={() => chooseTf(t.days)}>
-              {t.label}
-            </button>
+            <button key={t.days} className={`${s.swBtn} ${days === t.days ? s.swOn : ""}`} onClick={() => chooseTf(t.days)}>{t.label}</button>
           ))}
         </div>
       </div>
@@ -138,11 +165,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
           const isActive = i === active && layout > 1;
 
           return (
-            <div
-              key={i}
-              className={`${s.slot} ${isActive ? s.slotOn : ""}`}
-              onClick={() => setActive(i)}
-            >
+            <div key={i} className={`${s.slot} ${isActive ? s.slotOn : ""}`} onClick={() => setActive(i)}>
               {sym ? (
                 <>
                   <div className={s.slotHead}>
@@ -161,7 +184,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
                   </div>
                   {series ? (
                     <>
-                      <div className={s.slotChart}><BigChart data={series} /></div>
+                      <div className={s.slotChart}><BigChart data={series} candles={cell?.ohlc} mode={mode} /></div>
                       <div className={s.slotFoot}>
                         <span>{de(Math.min(...series))} – {de(Math.max(...series))}</span>
                         <span>{cell?.demo ? <span className={s.demoTag}>Demo-Daten</span> : `${series.length} Tage`}</span>
@@ -178,7 +201,14 @@ export default function ChartView({ focus }: { focus: string | null }) {
                 </>
               ) : (
                 <div className={s.slotEmpty}>
-                  <span className={s.slotEmptyText}>Leerer Chart — Kürzel eingeben oder in der Watchlist wählen.</span>
+                  <span className={s.slotEmptyText}>Leerer Chart — aus der Watchlist wählen oder Kürzel eingeben.</span>
+                  {watch.length > 0 && (
+                    <div className={s.pickRow}>
+                      {watch.slice(0, 8).map((w) => (
+                        <button key={w} className={s.pickChip} onClick={(e) => { e.stopPropagation(); setSlot(i, w); }}>{w}</button>
+                      ))}
+                    </div>
+                  )}
                   <input
                     className={s.slotInput}
                     placeholder="z. B. NVDA"

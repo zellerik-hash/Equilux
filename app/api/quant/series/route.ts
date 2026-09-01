@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { closes } from "@/lib/quant/prices";
+import { candles } from "@/lib/quant/prices";
 
 export const runtime = "nodejs";
 
 /**
- * Schlusskursreihe eines Titels für die Chart-Anzeige.
- * `?symbol=SAP.DE&days=180`. Zieht serverseitig von Yahoo.
+ * Kursreihe eines Titels für die Chart-Anzeige: Schlusskurse plus OHLC-Kerzen
+ * (für Kerzencharts). `?symbol=SAP.DE&days=180`. Zieht serverseitig von Yahoo.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -16,11 +16,19 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "Parameter symbol fehlt" }, { status: 400 });
   }
   try {
-    const data = await closes(symbol, days);
-    if (data.length < 2) {
+    const ohlc = await candles(symbol, days);
+    if (ohlc.length < 2) {
       return NextResponse.json({ ok: false, error: "Zu wenige Kursdaten" }, { status: 422 });
     }
-    return NextResponse.json({ ok: true, data: { symbol, closes: data } });
+    const closes = ohlc.map((c) => c.c);
+    return NextResponse.json({
+      ok: true,
+      data: {
+        symbol,
+        closes,
+        ohlc: ohlc.map((c) => ({ o: c.o, h: c.h, l: c.l, c: c.c })),
+      },
+    });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "Abruf fehlgeschlagen" },
