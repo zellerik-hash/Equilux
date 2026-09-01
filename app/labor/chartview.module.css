@@ -1,0 +1,57 @@
+/* EQUILUX — Chart-Ansicht (TradingView-artig). Theme-aware. */
+
+.bigWrap { position: relative; width: 100%; height: 100%; min-height: 260px; }
+.readout {
+  position: absolute; top: 10px; pointer-events: none;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; box-shadow: var(--shadow);
+}
+.readoutPrice { font: 600 13px/1 var(--font-mono-stack); color: var(--text); }
+.readoutDay { font: 400 10px/1 var(--font-mono-stack); color: var(--text-faint); }
+
+.chartView { display: flex; flex-direction: column; gap: 14px; }
+.cvBar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cvBar .grow { margin-left: auto; }
+.switch { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.swBtn { background: var(--surface); border: 0; padding: 7px 13px; color: var(--text-dim); font: 500 12px/1 var(--font-mono-stack); cursor: pointer; transition: color .15s var(--ease-out), background-color .15s var(--ease-out); }
+.swBtn:hover { color: var(--text); }
+.swOn { background: var(--surface-2); color: var(--text); }
+.swLabel { font: 500 10px/1 var(--font-mono-stack); letter-spacing: .14em; text-transform: uppercase; color: var(--text-faint); margin-right: 2px; }
+
+.cvGrid { display: grid; gap: 14px; min-height: 72vh; }
+
+.slot {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; min-height: 300px;
+  cursor: pointer; transition: border-color .16s var(--ease-out);
+}
+.slotOn { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+.slotHead { display: flex; align-items: center; gap: 11px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.slotMeta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.slotSym { font: 600 14px/1.1 var(--font-mono-stack); color: var(--text); }
+.slotName { font-size: 11px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.slotLast { margin-left: auto; text-align: right; display: flex; flex-direction: column; gap: 1px; }
+.slotPrice { font: 500 15px/1.1 var(--font-mono-stack); color: var(--text); }
+.slotDelta { font: 500 11px/1.1 var(--font-mono-stack); }
+.slotX { background: transparent; border: 0; color: var(--text-faint); cursor: pointer; font-size: 13px; padding: 3px 6px; border-radius: 6px; margin-left: 4px; }
+.slotX:hover { color: var(--down); }
+.slotChart { flex: 1; min-height: 0; padding: 6px 8px 10px; }
+.slotFoot { display: flex; justify-content: space-between; padding: 0 14px 10px; font: 400 10.5px/1 var(--font-mono-stack); color: var(--text-faint); }
+.demoTag { color: var(--newyork); }
+
+/* Leerer Slot / Zustand */
+.slotEmpty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; }
+.slotEmptyText { color: var(--text-dim); font-size: 13px; }
+.slotInput {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px;
+  color: var(--text); font: 400 13px/1.2 var(--font-mono-stack); text-transform: uppercase; width: 160px; text-align: center;
+}
+.slotInput:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.demoBtn { background: transparent; border: 1px dashed var(--border-strong); color: var(--text-dim); border-radius: 7px; padding: 6px 11px; font: 500 11.5px/1 var(--font-mono-stack); cursor: pointer; }
+.demoBtn:hover { color: var(--text); border-color: var(--newyork); }
+.stateText { color: var(--text-dim); font-size: 12.5px; }
+
+@media (max-width: 900px) {
+  .cvGrid { grid-template-columns: 1fr !important; min-height: 0; }
+  .slot { min-height: 300px; }
+}
