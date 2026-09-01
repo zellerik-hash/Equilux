@@ -11,6 +11,8 @@ const LINKS = [
 
 export default function Nav() {
   const pathname = usePathname();
+  // Auf /labor übernimmt die App-Shell mit Seitenleiste die Navigation.
+  if (pathname.startsWith("/labor")) return null;
   return (
     <nav className={s.nav}>
       <Link href="/" className={s.brand}>EQUILUX</Link>
