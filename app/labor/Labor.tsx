@@ -44,7 +44,7 @@ export default function Labor() {
   const onFocus = (sym: string) => { setFocus(sym); setView("charts"); persist("charts", sym); };
 
   return (
-    <div className={s.shell}>
+    <div className={`${s.shell} ${view === "charts" ? s.shellWide : ""}`}>
       <header className={s.topbar}>
         <Link href="/" className={s.brandMark}>EQUILUX</Link>
         <Link href="/" className={s.backLink}>← Übersicht</Link>

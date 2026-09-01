@@ -39,10 +39,11 @@ function rangeFor(days: number): string {
 
 /* ---------- Yahoo ---------- */
 
-async function yahooCandles(sym: string, days: number): Promise<OHLC[]> {
+/** Roh-Chart von Yahoo für beliebiges range/interval (Tages- wie Intraday). */
+async function yahooChart(sym: string, range: string, interval: string): Promise<OHLC[]> {
   const url =
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}` +
-    `?range=${rangeFor(days)}&interval=1d`;
+    `?range=${range}&interval=${interval}`;
   const res = await fetch(url, {
     headers: {
       "User-Agent":
@@ -72,7 +73,11 @@ async function yahooCandles(sym: string, days: number): Promise<OHLC[]> {
     }
   }
   if (out.length === 0) throw new Error("Yahoo leer");
-  return out.slice(-days);
+  return out;
+}
+
+async function yahooCandles(sym: string, days: number): Promise<OHLC[]> {
+  return (await yahooChart(sym, rangeFor(days), "1d")).slice(-days);
 }
 
 /* ---------- Stooq (Fallback) ---------- */
@@ -136,6 +141,24 @@ export async function candles(symbol: string, days = 750): Promise<OHLC[]> {
   } catch {
     return await stooqCandles(sym, days);
   }
+}
+
+/** Erlaubte Intraday-Auflösungen (Yahoo). */
+const INTRADAY_INTERVALS = new Set(["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h"]);
+const INTRADAY_RANGES = new Set(["1d", "5d", "1mo"]);
+
+/**
+ * Intraday-Kerzen (Minuten/Stunden). Nur über Yahoo — Stooq führt keine
+ * Intraday-Daten. Auf Rechenzentrums-IPs (Vercel) kann Yahoo blocken; lokal
+ * funktioniert es. Wirft bei Ausfall, damit die UI sauber darauf reagieren kann.
+ */
+export async function intradayCandles(
+  symbol: string, range = "1d", interval = "5m",
+): Promise<OHLC[]> {
+  const sym = normTicker(symbol);
+  const r = INTRADAY_RANGES.has(range) ? range : "1d";
+  const iv = INTRADAY_INTERVALS.has(interval) ? interval : "5m";
+  return yahooChart(sym, r, iv);
 }
 
 /** Schlusskurse eines Titels, älteste zuerst. */

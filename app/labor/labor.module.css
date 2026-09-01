@@ -17,7 +17,10 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 24px 120px;
+  transition: max-width 0.28s var(--ease-in-out);
 }
+/* Chart-Modus: aus der editorialen Spalte ausbrechen, Bildschirm füllen. */
+.shellWide { max-width: min(1760px, 96vw); }
 
 /* Terminal-Kopfzeile */
 .topbar {

@@ -4,20 +4,33 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import s from "./chartview.module.css";
 import { de, eur } from "@/lib/quant/num";
 
-export interface Ohlc { o: number; h: number; l: number; c: number; }
+export interface Ohlc { t?: number; o: number; h: number; l: number; c: number; }
+
+/** Zeitstempel (Unix-Sekunden) für den Hover formatieren. */
+function fmtStamp(sec: number, intraday: boolean): string {
+  const d = new Date(sec * 1000);
+  const p = (n: number) => String(n).padStart(2, "0");
+  const date = `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}`;
+  if (!intraday) return date;
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}. ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 /**
  * Großer, bildschirmfüllender Chart — reines SVG (kein Framework). Zwei Modi:
  * Linie (Fläche + Verlauf) oder Kerzen (OHLC). Y-Achse mit Preisstufen,
- * Letztkurs-Marke, Hover-Fadenkreuz mit Preisanzeige.
+ * Letztkurs-Marke, Hover-Fadenkreuz mit Preis- und Zeitanzeige.
  */
 export default function BigChart({
   data,
   candles,
+  times,
+  intraday = false,
   mode = "line",
 }: {
   data: number[];
   candles?: Ohlc[];
+  times?: number[];
+  intraday?: boolean;
   mode?: "line" | "candles";
 }) {
   const wrap = useRef<HTMLDivElement>(null);
@@ -158,7 +171,11 @@ export default function BigChart({
       {hv != null && (
         <div className={s.readout} style={{ left: Math.min(hx + 12, geo.w - 150) }}>
           <span className={s.readoutPrice}>{eur(hv)}</span>
-          <span className={s.readoutDay}>vor {data.length - 1 - (hover ?? 0)} Tagen</span>
+          <span className={s.readoutDay}>
+            {times && times[hover ?? 0] != null
+              ? fmtStamp(times[hover ?? 0], intraday)
+              : `vor ${data.length - 1 - (hover ?? 0)} ${intraday ? "Schritten" : "Tagen"}`}
+          </span>
         </div>
       )}
     </div>
