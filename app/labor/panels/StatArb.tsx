@@ -4,6 +4,7 @@ import { useState } from "react";
 import s from "../labor.module.css";
 import { de, pct, pctPlain } from "@/lib/quant/num";
 import type { PairReport } from "@/lib/quant/statarb";
+import { useMode } from "../../mode";
 
 const PRESETS: [string, string][] = [
   ["SHEL.L", "BP.L"], ["ALV.DE", "MUV2.DE"], ["SAN.MC", "BBVA.MC"],
@@ -15,6 +16,7 @@ interface PairData extends PairReport {
 }
 
 export default function StatArb() {
+  const { simple } = useMode();
   const [a, setA] = useState("SHEL.L");
   const [b, setB] = useState("BP.L");
   const [busy, setBusy] = useState(false);
@@ -52,6 +54,14 @@ export default function StatArb() {
 
   return (
     <div className={s.panel}>
+      {simple && (
+        <p className={s.moduleLead}>
+          <b>Paar-Handel:</b> zwei Aktien, die normalerweise im Gleichschritt laufen (z. B. Shell und BP).
+          Läuft eine vorübergehend davon, wettet man auf die Rückkehr zum Normalabstand. EQUILUX prüft,
+          ob das Paar statistisch zusammenhängt, wie schnell es zurückfindet und ob eine simple Strategie
+          in der Vergangenheit getragen hätte. <b>Braucht Live-Kursdaten.</b>
+        </p>
+      )}
       <div className={s.row}>
         <label className={s.field}>
           <span>Titel A</span>
@@ -110,11 +120,9 @@ export default function StatArb() {
           </div>
 
           <p className={s.note}>
-            Der Out-of-Sample-Sharpe ist die einzige belastbare Zahl der Tabelle. In-Sample-Werte
-            sind bei so wenigen Parametern fast immer zu gut, und das Jahresergebnis unterstellt
-            eine Positionsgröße, bei der eine Spreadbewegung von einem Sigma zehn Prozent des
-            eingesetzten Kapitals ausmacht — mit 10 Basispunkten Kosten je Positionswechsel.
-            Leihkosten für die Short-Seite stecken darin nicht.
+            {simple
+              ? "Verlässlich ist vor allem der Sharpe (Out-of-Sample) — er misst, wie sich die Strategie auf Daten schlägt, die sie beim Optimieren nicht gesehen hat. Die anderen Zahlen sehen fast immer zu gut aus. Leihkosten für Leerverkäufe sind nicht eingerechnet."
+              : "Der Out-of-Sample-Sharpe ist die einzige belastbare Zahl der Tabelle. In-Sample-Werte sind bei so wenigen Parametern fast immer zu gut, und das Jahresergebnis unterstellt eine Positionsgröße, bei der eine Spreadbewegung von einem Sigma zehn Prozent des eingesetzten Kapitals ausmacht — mit 10 Basispunkten Kosten je Positionswechsel. Leihkosten für die Short-Seite stecken darin nicht."}
           </p>
         </>
       )}

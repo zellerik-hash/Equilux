@@ -4,6 +4,7 @@ import { useState } from "react";
 import s from "../labor.module.css";
 import { de, pctPlain } from "@/lib/quant/num";
 import type { EdgarResult } from "@/lib/quant/edgar";
+import { useMode } from "../../mode";
 
 /** Klartext-Einordnung eines Abnehmers auf Deutsch. */
 function deSatz(c: { name: string | null; share: number | null }): string {
@@ -15,6 +16,7 @@ function deSatz(c: { name: string | null; share: number | null }): string {
 }
 
 export default function Filings() {
+  const { simple } = useMode();
   const [ticker, setTicker] = useState("NVDA");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -35,6 +37,14 @@ export default function Filings() {
 
   return (
     <div className={s.panel}>
+      {simple && (
+        <p className={s.moduleLead}>
+          <b>Wie abhängig ist ein US-Unternehmen von einzelnen Großkunden?</b> EQUILUX liest den
+          jüngsten Jahresbericht (bei der US-Börsenaufsicht SEC) und zeigt, ob viel Umsatz an
+          wenigen Abnehmern hängt — ein Risiko, das keine normale Kennzahl zeigt. Kürzel eingeben,
+          z. B. NVDA. <b>Braucht Internet.</b>
+        </p>
+      )}
       <div className={s.row}>
         <label className={s.field}>
           <span>US-Kürzel</span>

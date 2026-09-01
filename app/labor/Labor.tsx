@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import s from "./labor.module.css";
 import ThemeToggle from "../ThemeToggle";
+import ModeToggle from "../ModeToggle";
+import { useMode } from "../mode";
 import SessionClock from "./SessionClock";
 import WatchlistRail from "./WatchlistRail";
 import ChartView from "./ChartView";
@@ -24,6 +26,7 @@ export default function Labor() {
   const [view, setView] = useState<View>(wantsKern ? "werkzeuge" : "charts");
   const [focusModule, setFocusModule] = useState<string | null>(wantsKern);
   const [railOpen, setRailOpen] = useState(true);
+  const { simple } = useMode();
 
   useEffect(() => {
     try {
@@ -61,6 +64,7 @@ export default function Labor() {
         <Link href="/" className={s.backLink}>← Übersicht</Link>
         <div className={s.topRight}>
           <SessionClock />
+          <ModeToggle />
           <ThemeToggle />
         </div>
       </header>
@@ -73,7 +77,7 @@ export default function Labor() {
                 Charts
               </button>
               <button role="tab" aria-selected={view === "werkzeuge"} className={`${s.vBtn} ${view === "werkzeuge" ? s.vOn : ""}`} onClick={() => setV("werkzeuge")}>
-                Werkzeuge
+                {simple ? "Rechner" : "Werkzeuge"}
               </button>
             </div>
           </div>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Reorder, useDragControls, AnimatePresence } from "motion/react";
 import s from "./labor.module.css";
+import { useMode } from "../mode";
 import Methodik from "./Methodik";
 import Derivate from "./panels/Derivate";
 import Bewertung from "./panels/Bewertung";
@@ -13,13 +14,13 @@ import Brief from "./panels/Brief";
 
 type Key = "derivate" | "bewertung" | "statarb" | "sotp" | "filings" | "brief";
 
-const REGISTRY: Record<Key, { kicker: string; name: string; Comp: React.ComponentType }> = {
-  derivate: { kicker: "Derivate", name: "Optionsscheine & Turbos", Comp: Derivate },
-  bewertung: { kicker: "Bewertung", name: "Fünf-Methoden-DCF", Comp: Bewertung },
-  statarb: { kicker: "Stat-Arb", name: "Kointegration & Backtest", Comp: StatArb },
-  sotp: { kicker: "SOTP", name: "Sum-of-the-Parts", Comp: Sotp },
-  filings: { kicker: "Filings", name: "Kundenkonzentration", Comp: Filings },
-  brief: { kicker: "Marktbrief", name: "Session-Briefing", Comp: Brief },
+const REGISTRY: Record<Key, { kicker: string; name: string; nameSimple: string; Comp: React.ComponentType }> = {
+  derivate: { kicker: "Derivate", name: "Optionsscheine & Turbos", nameSimple: "Optionsscheine & Hebel", Comp: Derivate },
+  bewertung: { kicker: "Bewertung", name: "Fünf-Methoden-DCF", nameSimple: "Was ist die Aktie wert?", Comp: Bewertung },
+  statarb: { kicker: "Stat-Arb", name: "Kointegration & Backtest", nameSimple: "Paar-Handel (zwei Aktien)", Comp: StatArb },
+  sotp: { kicker: "SOTP", name: "Sum-of-the-Parts", nameSimple: "Konzern in Teilen bewerten", Comp: Sotp },
+  filings: { kicker: "Filings", name: "Kundenkonzentration", nameSimple: "Abhängig von Großkunden?", Comp: Filings },
+  brief: { kicker: "Marktbrief", name: "Session-Briefing", nameSimple: "Markt-Briefing zur Session", Comp: Brief },
 };
 const ALL: Key[] = ["derivate", "bewertung", "statarb", "sotp", "filings", "brief"];
 // Schlanke Startauswahl — der Rest wird über die Palette bei Bedarf zugeschaltet,
@@ -104,6 +105,7 @@ export default function Werkzeuge({ focusModule }: { focusModule?: string | null
 
 function ModuleCard({ k, collapsed, onToggle, onRemove, onRef }: { k: Key; collapsed: boolean; onToggle: () => void; onRemove: () => void; onRef?: (el: HTMLElement | null) => void }) {
   const controls = useDragControls();
+  const { simple } = useMode();
   const mod = REGISTRY[k];
   const Comp = mod.Comp;
   return (
@@ -122,7 +124,7 @@ function ModuleCard({ k, collapsed, onToggle, onRemove, onRef }: { k: Key; colla
         <span className={s.dragHandle} onPointerDown={(e) => controls.start(e)} title="Ziehen zum Anordnen" aria-label="Ziehen zum Anordnen">⠿</span>
         <div className={s.moduleMeta}>
           <span className={s.moduleKicker}>{mod.kicker}</span>
-          <h2 className={s.moduleName}>{mod.name}</h2>
+          <h2 className={s.moduleName}>{simple ? mod.nameSimple : mod.name}</h2>
         </div>
         <div className={s.moduleActions}>
           <Methodik tab={k} />

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import s from "../labor.module.css";
 import type { Brief as BriefData, SessionKey } from "@/lib/quant/brief";
+import { useMode } from "../../mode";
 
 const SESSIONS: { key: SessionKey; label: string }[] = [
   { key: "london_open", label: "London Open" },
@@ -19,6 +20,7 @@ interface Payload {
 }
 
 export default function Brief() {
+  const { simple } = useMode();
   const [session, setSession] = useState<SessionKey | "">("");
   const [watch, setWatch] = useState("Adidas, Rheinmetall, Infineon, thyssenkrupp, Nexans, SAP, Siemens Energy, IREN Limited");
   const [busy, setBusy] = useState(false);
@@ -44,6 +46,13 @@ export default function Brief() {
 
   return (
     <div className={s.panel}>
+      {simple && (
+        <p className={s.moduleLead}>
+          <b>Kurzer Überblick zum Handelstag</b> für London und New York: Marktlage, wichtige
+          Termine und anstehende Zahlen. Wähl eine Session (oder „nächstliegende") und optional
+          deine Watchlist. <b>Recherche über die Websuche</b> — braucht Internet und einen Schlüssel.
+        </p>
+      )}
       <div className={s.row}>
         <label className={s.field}>
           <span>Session</span>

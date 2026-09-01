@@ -7,6 +7,7 @@ import type { WarrantInput } from "@/lib/quant/bs";
 import { de, pct, pctPlain, eur } from "@/lib/quant/num";
 import { Num, Eur, Pct, PctPlain } from "../Num";
 import InfoDot from "../InfoDot";
+import { useMode } from "../../mode";
 
 /**
  * Die Rechnung läuft im Browser, nicht über die Route: Black-Scholes kostet
@@ -15,6 +16,8 @@ import InfoDot from "../InfoDot";
  * außen.
  */
 export default function Derivate() {
+  const { simple } = useMode();
+  const L = (term: string, plain: string) => (simple ? plain : term);
   const [mode, setMode] = useState<"warrant" | "turbo">("warrant");
   const [f, setF] = useState({
     spot: 170, strike: 180, days: 310, rate: 2.5, vol: 33.6,
@@ -95,6 +98,14 @@ export default function Derivate() {
         </button>
       </div>
 
+      {simple && (
+        <p className={s.moduleLead}>
+          {mode === "warrant"
+            ? <>Was ist ein <b>Optionsschein</b> rechnerisch wert, wie stark <b>hebelt</b> er, und wie hoch die Chance, am Ende im Plus zu sein? Trag die Eckdaten des Scheins ein — oder hol sie oben per WKN/ISIN.</>
+            : <>Ein <b>Turbo/Knock-out</b> hebelt stark, wird aber wertlos, wenn der Kurs die <b>Barriere</b> berührt. Hier siehst du Wert, Hebel und die Wahrscheinlichkeit einer Berührung.</>}
+        </p>
+      )}
+
       <div className={s.identRow}>
         <label className={s.field} style={{ flex: "1 1 240px" }}>
           <span>WKN / ISIN {loaded && <span className={s.identBadge}>{loaded}</span>}</span>
@@ -112,14 +123,14 @@ export default function Derivate() {
       {identMsg && <p className={identMsg.ok ? s.note : s.warn}>{identMsg.text}</p>}
 
       <div className={s.grid}>
-        <Field label="Kurs Basiswert" value={f.spot} onChange={set("spot")} step="0.01" />
-        <Field label="Basispreis" value={f.strike} onChange={set("strike")} step="0.01" />
+        <Field label={L("Kurs Basiswert", "Kurs der Aktie")} value={f.spot} onChange={set("spot")} step="0.01" />
+        <Field label={L("Basispreis", "Basispreis (Strike)")} value={f.strike} onChange={set("strike")} step="0.01" />
         <Field label="Restlaufzeit (Tage)" value={f.days} onChange={set("days")} />
-        <Field label="Bezugsverhältnis" value={f.ratio} onChange={set("ratio")} step="0.01" />
-        <Field label="Volatilität (%)" value={f.vol} onChange={set("vol")} step="0.1" />
-        <Field label="Zins (%)" value={f.rate} onChange={set("rate")} step="0.1" />
-        {mode === "turbo" && <Field label="Barriere" value={f.barrier} onChange={set("barrier")} step="0.01" />}
-        <Field label="Stückzahl" value={f.quantity} onChange={set("quantity")} />
+        <Field label={L("Bezugsverhältnis", "Scheine je Aktie")} value={f.ratio} onChange={set("ratio")} step="0.01" />
+        <Field label={L("Volatilität (%)", "Schwankung / Vola (%)")} value={f.vol} onChange={set("vol")} step="0.1" />
+        <Field label={L("Zins (%)", "Zinssatz (%)")} value={f.rate} onChange={set("rate")} step="0.1" />
+        {mode === "turbo" && <Field label={L("Barriere", "Barriere (K.-o.-Schwelle)")} value={f.barrier} onChange={set("barrier")} step="0.01" />}
+        <Field label={L("Stückzahl", "Anzahl Scheine")} value={f.quantity} onChange={set("quantity")} />
         <Field label="Einstand je Schein" value={f.entry} onChange={set("entry")} step="0.001" />
         {mode === "warrant" && (
           <Field label="Marktpreis je Schein" value={f.market} onChange={set("market")} step="0.001" />
@@ -142,28 +153,36 @@ export default function Derivate() {
           )}
 
           <div className={s.stats}>
-            <Stat label="Modellwert" value={<Eur v={w.fair} d={3} />} />
-            <Stat label="Innerer Wert" value={<Eur v={w.intrinsic} d={3} />} />
-            <Stat label="Zeitwert" value={<Eur v={w.timeValue} d={3} />} />
-            <Stat label="Break-even" value={<Eur v={w.breakEven} />} />
-            <Stat label="Aufgeld" value={<PctPlain v={w.premium} />} sub={`${pctPlain(w.premiumPa)} p. a.`}
+            <Stat label={L("Modellwert", "Rechnerischer Wert")} value={<Eur v={w.fair} d={3} />}
+              info="Fairer Preis des Scheins laut Black-Scholes-Merton-Modell." />
+            <Stat label={L("Innerer Wert", "Sofort-Wert")} value={<Eur v={w.intrinsic} d={3} />}
+              info="Was der Schein bei sofortiger Ausübung wert wäre — der Rest ist Zeitwert." />
+            <Stat label={L("Zeitwert", "Aufpreis für Zeit")} value={<Eur v={w.timeValue} d={3} />}
+              info="Aufschlag über dem inneren Wert; schmilzt bis zur Fälligkeit auf null." />
+            <Stat label={L("Break-even", "Ab hier im Plus")} value={<Eur v={w.breakEven} />}
+              info="Kurs des Basiswerts, ab dem sich der Schein bei Fälligkeit rechnet." />
+            <Stat label={L("Aufgeld", "Aufschlag")} value={<PctPlain v={w.premium} />} sub={`${pctPlain(w.premiumPa)} p. a.`}
               info="Wieviel mehr als den inneren Wert man über den Schein für den Basiswert zahlt. Der Break-even liegt um dieses Aufgeld über dem Basispreis." />
             <Stat label="Hebel" value={<Num v={w.leverage} d={2} />}
               info="Kurs des Basiswerts × Bezugsverhältnis, geteilt durch den Scheinpreis. Grobe Kennzahl — der Omega (effektiver Hebel) ist aussagekräftiger." />
-            <Stat label="Omega" value={<Num v={w.omega} d={2} />}
+            <Stat label={L("Omega", "Echter Hebel")} value={<Num v={w.omega} d={2} />}
               info="Effektiver Hebel: Hebel × Delta. Zeigt die prozentuale Wertänderung des Scheins je Prozent Kursänderung des Basiswerts." />
-            <Stat label="Im Geld enden" value={<PctPlain v={w.greeks.probItm} d={1} />}
+            <Stat label={L("Im Geld enden", "Chance auf Plus")} value={<PctPlain v={w.greeks.probItm} d={1} />}
               info="Risikoneutrale Wahrscheinlichkeit N(d2), bei Fälligkeit im Geld zu liegen — nicht die reale Wahrscheinlichkeit." />
           </div>
 
-          <h3 className={s.h3}>Greeks</h3>
-          <div className={s.stats}>
-            <Stat label="Delta" value={<Num v={w.greeks.delta} d={4} />} />
-            <Stat label="Gamma" value={<Num v={w.greeks.gamma} d={5} />} />
-            <Stat label="Theta / Tag" value={<Num v={w.greeks.theta} d={4} />} />
-            <Stat label="Vega / Vola-Punkt" value={<Num v={w.greeks.vega} d={4} />} />
-            <Stat label="Rho / Zinspunkt" value={<Num v={w.greeks.rho} d={4} />} />
-          </div>
+          {!simple && (
+            <>
+              <h3 className={s.h3}>Greeks</h3>
+              <div className={s.stats}>
+                <Stat label="Delta" value={<Num v={w.greeks.delta} d={4} />} />
+                <Stat label="Gamma" value={<Num v={w.greeks.gamma} d={5} />} />
+                <Stat label="Theta / Tag" value={<Num v={w.greeks.theta} d={4} />} />
+                <Stat label="Vega / Vola-Punkt" value={<Num v={w.greeks.vega} d={4} />} />
+                <Stat label="Rho / Zinspunkt" value={<Num v={w.greeks.rho} d={4} />} />
+              </div>
+            </>
+          )}
 
           {w.position && (
             <>
@@ -184,12 +203,14 @@ export default function Derivate() {
                 <Stat label="Vega in Euro" value={<Eur v={w.position.vegaEur} />}
                   sub="je Vola-Punkt" />
               </div>
-              <p className={s.note}>
-                Vega und Theta zeigen die eigentliche Spannung der Position: {eur(Math.abs(w.position.vegaEur))} je
-                Volatilitätspunkt gegen {eur(Math.abs(w.position.thetaEur))} Zeitwertverlust am Tag. Fällt die
-                implizite Volatilität nach einem Ereignis um fünf Punkte, kostet das
-                so viel wie {Math.round(Math.abs(w.position.vegaEur * 5 / Math.max(Math.abs(w.position.thetaEur), 0.01)))} Tage Zeitwert.
-              </p>
+              {!simple && (
+                <p className={s.note}>
+                  Vega und Theta zeigen die eigentliche Spannung der Position: {eur(Math.abs(w.position.vegaEur))} je
+                  Volatilitätspunkt gegen {eur(Math.abs(w.position.thetaEur))} Zeitwertverlust am Tag. Fällt die
+                  implizite Volatilität nach einem Ereignis um fünf Punkte, kostet das
+                  so viel wie {Math.round(Math.abs(w.position.vegaEur * 5 / Math.max(Math.abs(w.position.thetaEur), 0.01)))} Tage Zeitwert.
+                </p>
+              )}
             </>
           )}
 
@@ -223,9 +244,9 @@ export default function Derivate() {
             </table>
           </div>
           <p className={s.note}>
-            Die Volatilität bleibt in jeder Zelle konstant. Das ist die unrealistischste
-            Annahme der Matrix — nach einem Ereignis fällt die implizite Vola typischerweise,
-            und dieser Rückgang taucht hier nicht auf.
+            {simple
+              ? "Die Tabelle zeigt, was der Schein bei verschiedenen Kursen und nach einigen Tagen wert wäre — bei gleichbleibender Schwankung. Nach einem großen Ereignis fällt die Schwankung meist, das drückt den Wert zusätzlich."
+              : "Die Volatilität bleibt in jeder Zelle konstant. Das ist die unrealistischste Annahme der Matrix — nach einem Ereignis fällt die implizite Vola typischerweise, und dieser Rückgang taucht hier nicht auf."}
           </p>
         </>
       )}
@@ -233,11 +254,11 @@ export default function Derivate() {
       {mode === "turbo" && (
         <>
           <div className={s.stats}>
-            <Stat label="Modellwert" value={<Eur v={t.fair} d={3} />} />
+            <Stat label={L("Modellwert", "Rechnerischer Wert")} value={<Eur v={t.fair} d={3} />} />
             <Stat label="Hebel" value={<Num v={t.leverage} d={2} />} />
-            <Stat label="Abstand zur Barriere" value={<PctPlain v={t.distance} d={1} />} />
+            <Stat label={L("Abstand zur Barriere", "Puffer bis K.-o.")} value={<PctPlain v={t.distance} d={1} />} />
             <Stat
-              label="Berührung im Horizont"
+              label={L("Berührung im Horizont", "Chance auf K.-o.")}
               value={<PctPlain v={t.touchProb} d={1} />}
               tone={t.touchProb > 0.4 ? "down" : undefined}
             />
@@ -253,10 +274,9 @@ export default function Derivate() {
             </div>
           )}
           <p className={s.note}>
-            Die Berührungswahrscheinlichkeit ist risikoneutral: sie sagt, was der Markt
-            einpreist, nicht was eintritt. Bei Open-End-Turbos wandert die Barriere zudem
-            mit den Finanzierungskosten — das ist hier nicht modelliert und arbeitet
-            langfristig gegen die Long-Seite.
+            {simple
+              ? "Die K.-o.-Chance sagt, was der Markt einpreist — nicht, was sicher passiert. Bei Open-End-Turbos wandert die Barriere mit den Finanzierungskosten langsam nach oben; das ist hier nicht eingerechnet und arbeitet auf lange Sicht gegen dich."
+              : "Die Berührungswahrscheinlichkeit ist risikoneutral: sie sagt, was der Markt einpreist, nicht was eintritt. Bei Open-End-Turbos wandert die Barriere zudem mit den Finanzierungskosten — das ist hier nicht modelliert und arbeitet langfristig gegen die Long-Seite."}
           </p>
         </>
       )}

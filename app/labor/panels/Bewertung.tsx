@@ -6,6 +6,7 @@ import { valuation, type ValuationInput, type CapClass, type Cycle } from "@/lib
 import { de, pct, pctPlain, eur } from "@/lib/quant/num";
 import { Num, Eur, Pct, PctPlain } from "../Num";
 import InfoDot from "../InfoDot";
+import { useMode } from "../../mode";
 
 /**
  * Fünf-Methoden-Bewertung, live im Browser gerechnet. Bewusst ohne Verdikt:
@@ -22,6 +23,8 @@ const RELIABILITY_LABEL: Record<string, string> = {
 };
 
 export default function Bewertung() {
+  const { simple } = useMode();
+  const L = (term: string, plain: string) => (simple ? plain : term);
   const [f, setF] = useState({
     eps: 5.2, bvps: 31, fcf: 6.1, div: 2.2,
     g1: 8, g2: 4, g3: 2, pe: 20, roic: 14,
@@ -45,6 +48,13 @@ export default function Bewertung() {
 
   return (
     <div className={s.panel}>
+      {simple && (
+        <p className={s.moduleLead}>
+          Was ist eine Aktie <b>fair</b> wert? Trag die Eckdaten ein (Gewinn, Wachstum, Kurs …) —
+          EQUILUX rechnet fünf gängige Methoden und zeigt einen gewichteten fairen Wert plus die
+          <b> Abweichung vom aktuellen Kurs</b>. Kein Kursziel, keine Empfehlung.
+        </p>
+      )}
       <div className={s.grid}>
         <Field label="Gewinn je Aktie (EPS)" value={f.eps} onChange={num("eps")} step="0.01" />
         <Field label="Buchwert je Aktie" value={f.bvps} onChange={num("bvps")} step="0.01" />
@@ -52,12 +62,12 @@ export default function Bewertung() {
         <Field label="Dividende je Aktie" value={f.div} onChange={num("div")} step="0.01" />
         <Field label="Wachstum Jahr 1–5 (%)" value={f.g1} onChange={num("g1")} step="0.1" />
         <Field label="Wachstum Jahr 6–10 (%)" value={f.g2} onChange={num("g2")} step="0.1" />
-        <Field label="Terminales Wachstum (%)" value={f.g3} onChange={num("g3")} step="0.1" />
-        <Field label="Ziel-KGV" value={f.pe} onChange={num("pe")} step="0.5" />
-        <Field label="ROIC (%)" value={f.roic} onChange={num("roic")} step="0.1" />
-        <Field label="Beta" value={f.beta} onChange={num("beta")} step="0.05" />
+        <Field label={L("Terminales Wachstum (%)", "Langfrist-Wachstum (%)")} value={f.g3} onChange={num("g3")} step="0.1" />
+        <Field label={L("Ziel-KGV", "Ziel-KGV (Kurs/Gewinn)")} value={f.pe} onChange={num("pe")} step="0.5" />
+        <Field label={L("ROIC (%)", "Kapitalrendite ROIC (%)")} value={f.roic} onChange={num("roic")} step="0.1" />
+        <Field label={L("Beta", "Beta (Schwankung ggü. Markt)")} value={f.beta} onChange={num("beta")} step="0.05" />
         <Field label="Risikoloser Zins (%)" value={f.rf} onChange={num("rf")} step="0.1" />
-        <Field label="Risikoprämie (%)" value={f.erp} onChange={num("erp")} step="0.1" />
+        <Field label={L("Risikoprämie (%)", "Aktien-Risikoprämie (%)")} value={f.erp} onChange={num("erp")} step="0.1" />
         <Field label="Aktueller Kurs" value={f.price} onChange={num("price")} step="0.01" />
         <Select label="Größenklasse" value={cap} options={CAPS} onChange={(v) => setCap(v as CapClass)} />
         <Select label="Konjunkturphase" value={cycle} options={CYCLES} onChange={(v) => setCycle(v as Cycle)} />
@@ -65,19 +75,24 @@ export default function Bewertung() {
       </div>
 
       <div className={s.stats}>
-        <Stat label="Fairer Wert (gewichtet)" value={<Eur v={r.fair} />} />
-        <Stat label="Sicherheitsmarge (−25 %)" value={<Eur v={r.marginOfSafety} />} />
+        <Stat label={L("Fairer Wert (gewichtet)", "Fairer Wert")} value={<Eur v={r.fair} />}
+          info="Gewichtetes Mittel der rechenbaren Methoden." />
+        <Stat label={L("Sicherheitsmarge (−25 %)", "Kaufen erst ab (−25 %)")} value={<Eur v={r.marginOfSafety} />}
+          info="Fairer Wert minus 25 % Puffer — der Preis, ab dem Value-Investoren erst einsteigen." />
         <Stat
-          label="Abweichung vom Kurs"
+          label={L("Abweichung vom Kurs", "Über/unter dem Kurs")}
           value={<Pct v={r.deviation / 100} d={1} />}
           tone={r.deviation >= 0 ? "up" : "down"}
+          info="Wie weit der faire Wert über (+) oder unter (−) dem aktuellen Kurs liegt."
         />
-        <Stat label="WACC" value={<PctPlain v={r.wacc} d={2} />}
+        <Stat label={L("WACC", "Kapitalkosten (WACC)")} value={<PctPlain v={r.wacc} d={2} />}
           info="Kapitalkosten aus CAPM: risikoloser Zins + Beta × Risikoprämie, plus ein Zuschlag nach Größenklasse. Der Diskontsatz des DCF." />
-        <Stat label="Zyklusfaktor" value={<Num v={r.cycleFactor} d={2} />}
-          info="Multiplikator aus Konjunkturphase und Sektortyp (zyklisch/defensiv/tech), der die Methoden auf- oder abwertet." />
+        {!simple && (
+          <Stat label="Zyklusfaktor" value={<Num v={r.cycleFactor} d={2} />}
+            info="Multiplikator aus Konjunkturphase und Sektortyp (zyklisch/defensiv/tech), der die Methoden auf- oder abwertet." />
+        )}
         <Stat
-          label="Zuverlässigkeit"
+          label={L("Zuverlässigkeit", "Wie einig sind die Methoden?")}
           value={`${RELIABILITY_LABEL[r.reliability]} · ${r.activeCount}/5`}
           sub={`Streuung CV ${de(r.cv, 0)} %`}
           info="Aus Anzahl rechenbarer Methoden und ihrer Streuung (Variationskoeffizient). Ein hoher CV heißt: die Methoden sind sich uneinig, das Mittel trägt wenig." />
@@ -106,7 +121,7 @@ export default function Bewertung() {
         ))}
       </div>
 
-      {r.grid && (
+      {r.grid && !simple && (
         <>
           <h3 className={s.h3}>DCF-Sensitivität — WACC (Zeilen) × Wachstum J1–5 (Spalten)</h3>
           <div className={s.tableWrap}>

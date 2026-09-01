@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import s from "./Nav.module.css";
 import ThemeToggle from "./ThemeToggle";
+import ModeToggle from "./ModeToggle";
 
 export default function Nav() {
   const pathname = usePathname();
@@ -14,7 +15,8 @@ export default function Nav() {
     <nav className={s.nav}>
       <Link href="/" className={s.brand}>EQUILUX</Link>
       <div className={s.right}>
-        <Link href="/labor" className={s.link}>Terminal</Link>
+        <ModeToggle />
+        <Link href="/labor" className={s.link}>Terminal öffnen</Link>
         <ThemeToggle />
       </div>
     </nav>

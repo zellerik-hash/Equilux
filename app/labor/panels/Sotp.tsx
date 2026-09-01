@@ -6,6 +6,7 @@ import { sotp, sotpSensitivity, impliedMultipleFactor } from "@/lib/quant/sotp";
 import type { Segment, SotpBasis, SotpInput } from "@/lib/quant/sotp";
 import { de, pct, pctPlain } from "@/lib/quant/num";
 import { Num as NumF, Eur, Pct, PctPlain } from "../Num";
+import { useMode } from "../../mode";
 
 const BASES: { key: SotpBasis; label: string }[] = [
   { key: "ebitda", label: "EBITDA" }, { key: "ebit", label: "EBIT" },
@@ -20,6 +21,7 @@ const START: Segment[] = [
 ];
 
 export default function Sotp() {
+  const { simple } = useMode();
   const [segs, setSegs] = useState<Segment[]>(START);
   const [bal, setBal] = useState({
     netDebt: -3100, pensions: 6200, minorities: 450,
@@ -42,6 +44,13 @@ export default function Sotp() {
 
   return (
     <div className={s.panel}>
+      {simple && (
+        <p className={s.moduleLead}>
+          <b>Konzern in Teilen bewerten:</b> jede Sparte einzeln ansetzen (Wert × Multiple),
+          alles addieren, dann Schulden und Pensionen abziehen und durch die Aktienzahl teilen.
+          Heraus kommt ein <b>Wert je Aktie</b> samt Bandbreite. Zahlen stehen im Geschäftsbericht.
+        </p>
+      )}
       <h3 className={s.h3}>Segmente (Mio.)</h3>
       <div className={s.tableWrap}>
         <table className={s.table}>

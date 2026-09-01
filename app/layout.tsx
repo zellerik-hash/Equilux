@@ -5,6 +5,7 @@ import "./globals.css";
 import Nav from "./Nav";
 import Aurora from "./Aurora";
 import SmoothScroll from "./SmoothScroll";
+import { ModeProvider } from "./mode";
 
 const dmSans = DM_Sans({ subsets: ["latin"], display: "swap", variable: "--font-sans" });
 const dmMono = DM_Mono({ subsets: ["latin"], weight: ["400", "500"], display: "swap", variable: "--font-mono" });
@@ -26,10 +27,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <Aurora />
-        <SmoothScroll>
-          <Nav />
-          {children}
-        </SmoothScroll>
+        <ModeProvider>
+          <SmoothScroll>
+            <Nav />
+            {children}
+          </SmoothScroll>
+        </ModeProvider>
       </body>
     </html>
   );
