@@ -13,10 +13,14 @@ import StatArb from "./panels/StatArb";
 import Sotp from "./panels/Sotp";
 import Filings from "./panels/Filings";
 import Brief from "./panels/Brief";
+import Ticker from "./panels/Ticker";
+import Charts from "./panels/Charts";
 
-type Key = "derivate" | "bewertung" | "statarb" | "sotp" | "filings" | "brief";
+type Key = "ticker" | "charts" | "derivate" | "bewertung" | "statarb" | "sotp" | "filings" | "brief";
 
 const REGISTRY: Record<Key, { kicker: string; name: string; Comp: React.ComponentType }> = {
+  ticker: { kicker: "Watchlist", name: "Ticker & Firmenlogos", Comp: Ticker },
+  charts: { kicker: "Charts", name: "Kurscharts (bis zu vier)", Comp: Charts },
   derivate: { kicker: "Derivate", name: "Optionsscheine & Turbos", Comp: Derivate },
   bewertung: { kicker: "Bewertung", name: "Fünf-Methoden-DCF", Comp: Bewertung },
   statarb: { kicker: "Stat-Arb", name: "Kointegration & Backtest", Comp: StatArb },
@@ -25,7 +29,7 @@ const REGISTRY: Record<Key, { kicker: string; name: string; Comp: React.Componen
   brief: { kicker: "Marktbrief", name: "Session-Briefing", Comp: Brief },
 };
 
-const ALL: Key[] = ["derivate", "bewertung", "statarb", "sotp", "filings", "brief"];
+const ALL: Key[] = ["ticker", "charts", "derivate", "bewertung", "statarb", "sotp", "filings", "brief"];
 const STORE = "equilux-terminal-v1";
 
 export default function Labor() {
