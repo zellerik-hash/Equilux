@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Reorder, useDragControls, AnimatePresence } from "motion/react";
 import s from "./labor.module.css";
 import Methodik from "./Methodik";
@@ -24,9 +24,10 @@ const REGISTRY: Record<Key, { kicker: string; name: string; Comp: React.Componen
 const ALL: Key[] = ["derivate", "bewertung", "statarb", "sotp", "filings", "brief"];
 const STORE = "equilux-werkzeuge-v1";
 
-export default function Werkzeuge() {
+export default function Werkzeuge({ focusModule }: { focusModule?: string | null }) {
   const [order, setOrder] = useState<Key[]>(ALL);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const refs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
     try {
@@ -38,6 +39,16 @@ export default function Werkzeuge() {
       }
     } catch { /* egal */ }
   }, []);
+
+  // Direktlink zu einer Rechnung: sicherstellen, dass das Modul da & offen ist, dann hinscrollen.
+  useEffect(() => {
+    if (!focusModule || !ALL.includes(focusModule as Key)) return;
+    const k = focusModule as Key;
+    setOrder((o) => (o.includes(k) ? o : [...o, k]));
+    setCollapsed((c) => (c[k] ? { ...c, [k]: false } : c));
+    const t = setTimeout(() => refs.current[k]?.scrollIntoView({ behavior: "smooth", block: "start" }), 260);
+    return () => clearTimeout(t);
+  }, [focusModule]);
 
   const persist = (o: Key[], c: Record<string, boolean>) => {
     try { localStorage.setItem(STORE, JSON.stringify({ order: o, collapsed: c })); } catch { /* egal */ }
@@ -72,7 +83,14 @@ export default function Werkzeuge() {
         <Reorder.Group as="ul" axis="y" values={order} onReorder={reorder} className={s.modules}>
           <AnimatePresence initial={false}>
             {order.map((k) => (
-              <ModuleCard key={k} k={k} collapsed={!!collapsed[k]} onToggle={() => toggle(k)} onRemove={() => remove(k)} />
+              <ModuleCard
+                key={k}
+                k={k}
+                collapsed={!!collapsed[k]}
+                onToggle={() => toggle(k)}
+                onRemove={() => remove(k)}
+                onRef={(el) => { refs.current[k] = el; }}
+              />
             ))}
           </AnimatePresence>
         </Reorder.Group>
@@ -81,12 +99,13 @@ export default function Werkzeuge() {
   );
 }
 
-function ModuleCard({ k, collapsed, onToggle, onRemove }: { k: Key; collapsed: boolean; onToggle: () => void; onRemove: () => void }) {
+function ModuleCard({ k, collapsed, onToggle, onRemove, onRef }: { k: Key; collapsed: boolean; onToggle: () => void; onRemove: () => void; onRef?: (el: HTMLElement | null) => void }) {
   const controls = useDragControls();
   const mod = REGISTRY[k];
   const Comp = mod.Comp;
   return (
     <Reorder.Item
+      ref={onRef}
       value={k}
       dragListener={false}
       dragControls={controls}

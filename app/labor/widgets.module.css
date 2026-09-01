@@ -34,14 +34,21 @@
 .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
 .hint { color: var(--text-faint); font: 400 12px/1.4 var(--font-mono-stack); }
 
-/* Logo / Monogramm */
+/* Logo / Monogramm — Monogramm ist die Basis, das echte Logo legt sich nur
+   bei erfolgreichem Laden darüber (kein kaputtes Bild, kein Netz-Zwang). */
 .logo {
-  width: 30px; height: 30px; border-radius: 8px; flex: none;
-  display: inline-flex; align-items: center; justify-content: center; overflow: hidden;
-  background: var(--surface-2); border: 1px solid var(--border);
+  position: relative; width: 30px; height: 30px; border-radius: 8px; flex: none;
+  overflow: hidden; border: 1px solid var(--border);
 }
-.logoImg { width: 100%; height: 100%; object-fit: contain; }
-.mono { font: 600 12px/1 var(--font-sans-stack); color: #fff; }
+.mono {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font: 600 12px/1 var(--font-sans-stack); color: #fff;
+}
+.logoImg {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+  background: #fff; opacity: 0; transition: opacity 0.2s var(--ease-out);
+}
+.logoImgOn { opacity: 1; }
 
 /* Ticker-Watchlist */
 .watch { display: flex; flex-wrap: wrap; gap: 10px; }

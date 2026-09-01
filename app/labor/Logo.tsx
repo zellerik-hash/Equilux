@@ -5,12 +5,11 @@ import s from "./widgets.module.css";
 import { metaFor } from "./symbols";
 
 /**
- * Firmenlogo aus der Logo-API (Clearbit über die Domain), mit Monogramm-
- * Fallback: ohne Domain, ohne Netz oder bei Ladefehler erscheint ein farbiges
- * Kürzel. So bricht nie etwas, das Logo ist eine Verbesserung, kein Zwang.
+ * Firmenlogo mit Monogramm als Basis. Das echte Logo (Clearbit über die
+ * Domain) legt sich nur darüber, wenn es erfolgreich lädt — schlägt der Abruf
+ * fehl oder gibt es keine Domain, bleibt das saubere farbige Kürzel stehen.
+ * So erscheint nie ein kaputtes Bild.
  */
-
-// Deterministische Farbe aus dem Ticker (angenehme Farbtöne).
 function hue(sym: string): number {
   let h = 0;
   for (let i = 0; i < sym.length; i++) h = (h * 31 + sym.charCodeAt(i)) % 360;
@@ -18,33 +17,31 @@ function hue(sym: string): number {
 }
 
 export default function Logo({ symbol }: { symbol: string }) {
-  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const sym = symbol.trim().toUpperCase();
   const meta = metaFor(sym);
-  const letters = sym.replace(/[.\-].*$/, "").slice(0, 2);
+  const letters = sym.replace(/[.\-].*$/, "").slice(0, 2) || sym.slice(0, 2);
+  const h = hue(sym);
 
-  if (meta.domain && !failed) {
-    return (
-      <span className={s.logo}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+  return (
+    <span className={s.logo}>
+      <span
+        className={s.mono}
+        style={{ background: `linear-gradient(135deg, hsl(${h} 55% 42%), hsl(${(h + 40) % 360} 55% 34%))` }}
+      >
+        {letters}
+      </span>
+      {meta.domain && (
+        /* eslint-disable-next-line @next/next/no-img-element */
         <img
           src={`https://logo.clearbit.com/${meta.domain}`}
           alt=""
-          className={s.logoImg}
+          className={`${s.logoImg} ${loaded ? s.logoImgOn : ""}`}
           loading="lazy"
-          onError={() => setFailed(true)}
+          referrerPolicy="no-referrer"
+          onLoad={() => setLoaded(true)}
         />
-      </span>
-    );
-  }
-
-  const h = hue(sym);
-  return (
-    <span
-      className={s.logo}
-      style={{ background: `linear-gradient(135deg, hsl(${h} 55% 42%), hsl(${(h + 40) % 360} 55% 34%))`, border: "none" }}
-    >
-      <span className={s.mono}>{letters}</span>
+      )}
     </span>
   );
 }

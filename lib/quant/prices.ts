@@ -1,10 +1,10 @@
 /**
  * EQUILUX — Kursbeschaffung für die Rechenkerne.
  *
- * Dünne Hülle um Yahoo, mit kurzem Cache im Prozess. Wenn dein Projekt
- * bereits `lib/yahoo.ts` hat, ersetze den Rumpf hier durch einen Aufruf
- * daraus — die Kerne interessiert nur, dass sie eine Reihe von Schlusskursen
- * in chronologischer Reihenfolge bekommen.
+ * Zwei Quellen: Yahoo zuerst (reich an Feldern, aber blockt Rechenzentrums-IPs
+ * wie bei Vercel), dann Stooq als Fallback (schlichtes CSV, kein Crumb/Key,
+ * datacenter-tauglich). Die Kerne interessiert nur, dass sie eine Reihe von
+ * Schlusskursen bzw. OHLC-Kerzen in chronologischer Reihenfolge bekommen.
  */
 
 const cache = new Map<string, { at: number; data: number[] }>();
@@ -24,31 +24,6 @@ export function normTicker(raw: string): string {
   return t;
 }
 
-/** Schlusskurse eines Titels, älteste zuerst. */
-export async function closes(symbol: string, days = 750): Promise<number[]> {
-  const sym = normTicker(symbol);
-  const key = `${sym}:${days}`;
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.data;
-
-  const range = days <= 260 ? "1y" : days <= 520 ? "2y" : days <= 1300 ? "5y" : "10y";
-  const url =
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}` +
-    `?range=${range}&interval=1d`;
-
-  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!res.ok) throw new Error(`Kursabruf für ${sym} fehlgeschlagen (${res.status}).`);
-
-  const json = (await res.json()) as {
-    chart?: { result?: Array<{ indicators?: { quote?: Array<{ close?: (number | null)[] }> } }> };
-  };
-  const raw = json.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
-  const data = raw.filter((v): v is number => typeof v === "number" && v > 0).slice(-days);
-
-  cache.set(key, { at: Date.now(), data });
-  return data;
-}
-
 export interface OHLC {
   t: number;
   o: number;
@@ -58,16 +33,24 @@ export interface OHLC {
   v?: number;
 }
 
-/** Vollständige OHLC-Kerzen eines Titels, älteste zuerst. Für Technik/Risiko. */
-export async function candles(symbol: string, days = 750): Promise<OHLC[]> {
-  const sym = normTicker(symbol);
-  const range = days <= 260 ? "1y" : days <= 520 ? "2y" : days <= 1300 ? "5y" : "10y";
+function rangeFor(days: number): string {
+  return days <= 260 ? "1y" : days <= 520 ? "2y" : days <= 1300 ? "5y" : "10y";
+}
+
+/* ---------- Yahoo ---------- */
+
+async function yahooCandles(sym: string, days: number): Promise<OHLC[]> {
   const url =
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}` +
-    `?range=${range}&interval=1d`;
-
-  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!res.ok) throw new Error(`Kursabruf für ${sym} fehlgeschlagen (${res.status}).`);
+    `?range=${rangeFor(days)}&interval=1d`;
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36",
+      Accept: "application/json",
+    },
+  });
+  if (!res.ok) throw new Error(`Yahoo ${res.status}`);
 
   const json = (await res.json()) as {
     chart?: { result?: Array<{
@@ -88,7 +71,85 @@ export async function candles(symbol: string, days = 750): Promise<OHLC[]> {
       out.push({ t: ts[i], o, h, l, c, v: typeof q?.volume?.[i] === "number" ? q!.volume![i]! : undefined });
     }
   }
+  if (out.length === 0) throw new Error("Yahoo leer");
   return out.slice(-days);
+}
+
+/* ---------- Stooq (Fallback) ---------- */
+
+/** Yahoo-Endung → Stooq-Endung. Länderbörsen und plain US-Ticker. */
+const STOOQ_SUFFIX: Record<string, string> = {
+  ".DE": ".de", ".L": ".uk", ".PA": ".fr", ".AS": ".nl", ".SW": ".ch",
+  ".MI": ".it", ".MC": ".es", ".BR": ".be", ".LS": ".pt", ".VI": ".at",
+  ".ST": ".se", ".HE": ".fi", ".CO": ".dk", ".OL": ".no", ".TO": ".ca",
+};
+
+/**
+ * Bildet einen Yahoo-Ticker auf ein Stooq-Symbol ab. Gibt null zurück, wenn
+ * Stooq den Titel sicher nicht führt (Indizes `^…`, Krypto `…-USD`), damit wir
+ * keine falsche Reihe zurückliefern.
+ */
+function toStooq(sym: string): string | null {
+  if (sym.startsWith("^") || sym.endsWith("-USD") || sym.endsWith("=X")) return null;
+  for (const [yh, st] of Object.entries(STOOQ_SUFFIX)) {
+    if (sym.endsWith(yh)) return sym.slice(0, -yh.length).toLowerCase() + st;
+  }
+  // Kein Länder-Suffix → als US-Titel behandeln.
+  if (!sym.includes(".")) return sym.toLowerCase() + ".us";
+  return null;
+}
+
+async function stooqCandles(sym: string, days: number): Promise<OHLC[]> {
+  const s = toStooq(sym);
+  if (!s) throw new Error(`Stooq kennt ${sym} nicht.`);
+  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(s)}&i=d`;
+  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) throw new Error(`Stooq ${res.status}`);
+  const text = await res.text();
+  // Fehlerfall: Stooq liefert "No data" o. Ä. statt CSV.
+  if (!text.startsWith("Date")) throw new Error(`Stooq ohne Daten für ${s}.`);
+
+  const lines = text.trim().split(/\r?\n/).slice(1);
+  const out: OHLC[] = [];
+  for (const line of lines) {
+    const [date, o, h, l, c, v] = line.split(",");
+    const co = +o, ch = +h, cl = +l, cc = +c;
+    if (Number.isFinite(co) && Number.isFinite(ch) && Number.isFinite(cl) && Number.isFinite(cc) && cc > 0) {
+      out.push({
+        t: Math.floor(new Date(date).getTime() / 1000),
+        o: co, h: ch, l: cl, c: cc,
+        v: Number.isFinite(+v) ? +v : undefined,
+      });
+    }
+  }
+  if (out.length === 0) throw new Error(`Stooq-CSV leer für ${s}.`);
+  return out.slice(-days);
+}
+
+/* ---------- Öffentliche API ---------- */
+
+/** Vollständige OHLC-Kerzen eines Titels, älteste zuerst. Yahoo, dann Stooq. */
+export async function candles(symbol: string, days = 750): Promise<OHLC[]> {
+  const sym = normTicker(symbol);
+  try {
+    return await yahooCandles(sym, days);
+  } catch {
+    return await stooqCandles(sym, days);
+  }
+}
+
+/** Schlusskurse eines Titels, älteste zuerst. */
+export async function closes(symbol: string, days = 750): Promise<number[]> {
+  const sym = normTicker(symbol);
+  const key = `${sym}:${days}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.data;
+
+  const ohlc = await candles(sym, days);
+  const data = ohlc.map((k) => k.c).filter((v) => v > 0).slice(-days);
+
+  cache.set(key, { at: Date.now(), data });
+  return data;
 }
 
 /** Mehrere Titel parallel, mit Begrenzung der gleichzeitigen Anfragen. */

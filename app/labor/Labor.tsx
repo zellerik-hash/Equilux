@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import s from "./labor.module.css";
 import ThemeToggle from "../ThemeToggle";
 import SessionClock from "./SessionClock";
@@ -11,12 +12,20 @@ import Werkzeuge from "./Werkzeuge";
 
 type View = "charts" | "werkzeuge";
 const STORE = "equilux-view-v1";
+const KERNE = ["derivate", "bewertung", "statarb", "sotp", "filings", "brief"];
 
 export default function Labor() {
+  const params = useSearchParams();
+  const initialK = params.get("k");
+  const wantsKern = initialK && KERNE.includes(initialK) ? initialK : null;
+
   const [focus, setFocus] = useState<string | null>("SAP.DE");
-  const [view, setView] = useState<View>("charts");
+  const [view, setView] = useState<View>(wantsKern ? "werkzeuge" : "charts");
+  const [focusModule, setFocusModule] = useState<string | null>(wantsKern);
 
   useEffect(() => {
+    // Direktlink zu einer Rechnung (?k=…) hat Vorrang vor der gespeicherten Ansicht.
+    if (wantsKern) return;
     try {
       const raw = localStorage.getItem(STORE);
       if (raw) {
@@ -25,6 +34,7 @@ export default function Labor() {
         if (typeof o.focus === "string") setFocus(o.focus);
       }
     } catch { /* egal */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const persist = (v: View, f: string | null) => {
@@ -59,7 +69,7 @@ export default function Labor() {
             </div>
           </div>
 
-          {view === "charts" ? <ChartView focus={focus} /> : <Werkzeuge />}
+          {view === "charts" ? <ChartView focus={focus} /> : <Werkzeuge focusModule={focusModule} />}
         </div>
       </div>
     </div>
