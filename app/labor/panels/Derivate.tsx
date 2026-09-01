@@ -6,6 +6,7 @@ import { warrant, turbo, impliedVol, scenarioMatrix } from "@/lib/quant/bs";
 import type { WarrantInput } from "@/lib/quant/bs";
 import { de, pct, pctPlain, eur } from "@/lib/quant/num";
 import { Num, Eur, Pct, PctPlain } from "../Num";
+import InfoDot from "../InfoDot";
 
 /**
  * Die Rechnung läuft im Browser, nicht über die Route: Black-Scholes kostet
@@ -95,10 +96,14 @@ export default function Derivate() {
             <Stat label="Innerer Wert" value={<Eur v={w.intrinsic} d={3} />} />
             <Stat label="Zeitwert" value={<Eur v={w.timeValue} d={3} />} />
             <Stat label="Break-even" value={<Eur v={w.breakEven} />} />
-            <Stat label="Aufgeld" value={<PctPlain v={w.premium} />} sub={`${pctPlain(w.premiumPa)} p. a.`} />
-            <Stat label="Hebel" value={<Num v={w.leverage} d={2} />} />
-            <Stat label="Omega" value={<Num v={w.omega} d={2} />} />
-            <Stat label="Im Geld enden" value={<PctPlain v={w.greeks.probItm} d={1} />} />
+            <Stat label="Aufgeld" value={<PctPlain v={w.premium} />} sub={`${pctPlain(w.premiumPa)} p. a.`}
+              info="Wieviel mehr als den inneren Wert man über den Schein für den Basiswert zahlt. Der Break-even liegt um dieses Aufgeld über dem Basispreis." />
+            <Stat label="Hebel" value={<Num v={w.leverage} d={2} />}
+              info="Kurs des Basiswerts × Bezugsverhältnis, geteilt durch den Scheinpreis. Grobe Kennzahl — der Omega (effektiver Hebel) ist aussagekräftiger." />
+            <Stat label="Omega" value={<Num v={w.omega} d={2} />}
+              info="Effektiver Hebel: Hebel × Delta. Zeigt die prozentuale Wertänderung des Scheins je Prozent Kursänderung des Basiswerts." />
+            <Stat label="Im Geld enden" value={<PctPlain v={w.greeks.probItm} d={1} />}
+              info="Risikoneutrale Wahrscheinlichkeit N(d2), bei Fälligkeit im Geld zu liegen — nicht die reale Wahrscheinlichkeit." />
           </div>
 
           <h3 className={s.h3}>Greeks</h3>
@@ -221,10 +226,13 @@ function Field(props: {
   );
 }
 
-function Stat(props: { label: string; value: React.ReactNode; sub?: string; tone?: "up" | "down" }) {
+function Stat(props: { label: string; value: React.ReactNode; sub?: string; tone?: "up" | "down"; info?: string }) {
   return (
     <div className={s.stat}>
-      <span className={s.statLabel}>{props.label}</span>
+      <span className={s.statLabel}>
+        {props.label}
+        {props.info && <InfoDot text={props.info} />}
+      </span>
       <span className={`${s.statValue} ${props.tone === "up" ? s.up : props.tone === "down" ? s.down : ""}`}>
         {props.value}
       </span>

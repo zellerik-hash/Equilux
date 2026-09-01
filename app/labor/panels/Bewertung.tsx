@@ -5,6 +5,7 @@ import s from "../labor.module.css";
 import { valuation, type ValuationInput, type CapClass, type Cycle } from "@/lib/quant/valuation";
 import { de, pct, pctPlain, eur } from "@/lib/quant/num";
 import { Num, Eur, Pct, PctPlain } from "../Num";
+import InfoDot from "../InfoDot";
 
 /**
  * Fünf-Methoden-Bewertung, live im Browser gerechnet. Bewusst ohne Verdikt:
@@ -71,13 +72,15 @@ export default function Bewertung() {
           value={<Pct v={r.deviation / 100} d={1} />}
           tone={r.deviation >= 0 ? "up" : "down"}
         />
-        <Stat label="WACC" value={<PctPlain v={r.wacc} d={2} />} />
-        <Stat label="Zyklusfaktor" value={<Num v={r.cycleFactor} d={2} />} />
+        <Stat label="WACC" value={<PctPlain v={r.wacc} d={2} />}
+          info="Kapitalkosten aus CAPM: risikoloser Zins + Beta × Risikoprämie, plus ein Zuschlag nach Größenklasse. Der Diskontsatz des DCF." />
+        <Stat label="Zyklusfaktor" value={<Num v={r.cycleFactor} d={2} />}
+          info="Multiplikator aus Konjunkturphase und Sektortyp (zyklisch/defensiv/tech), der die Methoden auf- oder abwertet." />
         <Stat
           label="Zuverlässigkeit"
           value={`${RELIABILITY_LABEL[r.reliability]} · ${r.activeCount}/5`}
           sub={`Streuung CV ${de(r.cv, 0)} %`}
-        />
+          info="Aus Anzahl rechenbarer Methoden und ihrer Streuung (Variationskoeffizient). Ein hoher CV heißt: die Methoden sind sich uneinig, das Mittel trägt wenig." />
       </div>
 
       <p className={s.note}>
@@ -178,10 +181,13 @@ function Select(props: { label: string; value: string; options: string[]; onChan
   );
 }
 
-function Stat(props: { label: string; value: React.ReactNode; sub?: string; tone?: "up" | "down" }) {
+function Stat(props: { label: string; value: React.ReactNode; sub?: string; tone?: "up" | "down"; info?: string }) {
   return (
     <div className={s.stat}>
-      <span className={s.statLabel}>{props.label}</span>
+      <span className={s.statLabel}>
+        {props.label}
+        {props.info && <InfoDot text={props.info} />}
+      </span>
       <span className={`${s.statValue} ${props.tone === "up" ? s.up : props.tone === "down" ? s.down : ""}`}>
         {props.value}
       </span>

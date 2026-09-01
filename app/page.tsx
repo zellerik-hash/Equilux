@@ -1,5 +1,6 @@
 import Link from "next/link";
 import s from "./home.module.css";
+import Reveal from "./Reveal";
 
 const KERNE = [
   {
@@ -58,6 +59,55 @@ export default function Home() {
           </Link>
         ))}
       </div>
+
+      <Reveal className={s.section}>
+        <span className={s.sectionKicker}>Was EQUILUX richtig macht</span>
+        <div className={s.principles}>
+          <div className={s.principle}>
+            <span className={s.principleNo}>01</span>
+            <h3 className={s.principleTitle}>Residuen-Kritikwerte, nicht Reihen-Kritikwerte</h3>
+            <p className={s.principleText}>
+              Der ADF-Test auf das Residuum einer Kointegrationsregression braucht
+              strengere Schwellen (Engle-Granger, −3,90/−3,34/−3,04) als der Test auf
+              eine beobachtete Reihe. Der gewöhnliche Test lehnt sonst zu oft ab und
+              produziert Trefferlisten voller Zufallsfunde.
+            </p>
+          </div>
+          <div className={s.principle}>
+            <span className={s.principleNo}>02</span>
+            <h3 className={s.principleTitle}>Kein Zinseszins auf Spread-Erträgen</h3>
+            <p className={s.principleText}>
+              Marktneutrale Strategien mit gleichbleibender Positionsgröße kennen
+              keinen Zinseszins. Die Backtest-Kurve ist additiv. Ein Sharpe über 1 bei
+              gleichzeitig stark negativer Jahresrendite hat genau diesen Fehler — hier
+              tritt er nicht auf.
+            </p>
+          </div>
+        </div>
+      </Reveal>
+
+      <Reveal className={s.section} delay={0.05}>
+        <span className={s.sectionKicker}>Geprüft gegen Referenzwerte</span>
+        <div className={s.proof}>
+          <div className={s.proofTile}>
+            <span className={s.proofValue}>10,4506 €</span>
+            <span className={s.proofLabel}>Black-Scholes-Call, exakt gegen Hull</span>
+          </div>
+          <div className={s.proofTile}>
+            <span className={s.proofValue}>β ≈ 2,00</span>
+            <span className={s.proofLabel}>Hedge-Ratio synthetischer Kointegration getroffen</span>
+          </div>
+          <div className={s.proofTile}>
+            <span className={s.proofValue}>43 / 43</span>
+            <span className={s.proofLabel}>Referenztests bestanden, 0 durchgefallen</span>
+          </div>
+        </div>
+        <p className={s.proofNote}>
+          Mathematik wird gegen bekannte Referenzwerte getestet, nicht gegen sich
+          selbst — Optionspreise gegen Hull, Zeitreihen gegen synthetische Reihen mit
+          bekanntem Ergebnis.
+        </p>
+      </Reveal>
 
       <p className={s.foot}>
         Kein Anlageberatungswerkzeug · Rechenkerne auf der Standardbibliothek ·

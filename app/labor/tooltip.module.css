@@ -1,0 +1,63 @@
+/* EQUILUX — Kennzahl-Tooltip (Radix). Portal-Inhalt, eigene Datei. */
+
+.dot {
+  --dim: #8a93a5;
+  --gold: #c8a24a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--faint, #5b6474);
+  font: 400 11px/1 var(--font-mono), ui-monospace, monospace;
+  cursor: help;
+  vertical-align: middle;
+  transition: color 140ms var(--ease-out);
+}
+.dot:hover { color: var(--gold); }
+
+.content {
+  max-width: 280px;
+  background: #0f1219;
+  color: #d4d9e2;
+  border: 1px solid #2b313d;
+  border-radius: 9px;
+  padding: 10px 12px;
+  font-family: var(--font-sans), -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 12.5px;
+  line-height: 1.5;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  transform-origin: var(--radix-tooltip-content-transform-origin);
+  z-index: 70;
+}
+
+.content[data-state="delayed-open"],
+.content[data-state="instant-open"] {
+  animation: ttIn 150ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.content[data-state="closed"] {
+  animation: ttOut 110ms ease-in;
+}
+
+@keyframes ttIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes ttOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.96); }
+}
+
+.arrow { fill: #0f1219; }
+
+@media (prefers-reduced-motion: reduce) {
+  .content[data-state="delayed-open"],
+  .content[data-state="instant-open"],
+  .content[data-state="closed"] {
+    animation: none;
+  }
+}
