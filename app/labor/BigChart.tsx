@@ -56,6 +56,64 @@ function movingAvg(values: number[], period: number, type: "sma" | "ema"): (numb
   return type === "ema" ? ema(values, period) : sma(values, period);
 }
 
+/** RSI-Reihe (Wilder-Glättung); Werte vor genug Historie sind null. */
+function rsiSeries(closes: number[], n = 14): (number | null)[] {
+  const out: (number | null)[] = new Array(closes.length).fill(null);
+  if (closes.length < n + 1) return out;
+  let g = 0, l = 0;
+  for (let i = 1; i <= n; i++) { const d = closes[i] - closes[i - 1]; if (d > 0) g += d; else l -= d; }
+  let ag = g / n, al = l / n;
+  out[n] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+  for (let i = n + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    ag = (ag * (n - 1) + Math.max(d, 0)) / n;
+    al = (al * (n - 1) + Math.max(-d, 0)) / n;
+    out[i] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+  }
+  return out;
+}
+
+/** MACD-Reihen (12/26/9) über EMA-Verläufe. */
+function macdSeries(closes: number[]): { macd: number[]; signal: number[]; hist: number[] } {
+  const macdLine: number[] = [];
+  let e12 = closes[0], e26 = closes[0];
+  const k12 = 2 / 13, k26 = 2 / 27;
+  for (const v of closes) { e12 = v * k12 + e12 * (1 - k12); e26 = v * k26 + e26 * (1 - k26); macdLine.push(e12 - e26); }
+  const signal: number[] = [];
+  let sig = macdLine[0]; const ks = 2 / 10;
+  for (let i = 0; i < macdLine.length; i++) { sig = i === 0 ? macdLine[0] : macdLine[i] * ks + sig * (1 - ks); signal.push(sig); }
+  const hist = macdLine.map((m, i) => m - signal[i]);
+  return { macd: macdLine, signal, hist };
+}
+
+/** Bollinger-Bänder (20/2) als volle Reihen. */
+function bollingerSeries(closes: number[], n = 20, k = 2): { upper: (number | null)[]; mid: (number | null)[]; lower: (number | null)[] } {
+  const upper: (number | null)[] = new Array(closes.length).fill(null);
+  const mid: (number | null)[] = new Array(closes.length).fill(null);
+  const lower: (number | null)[] = new Array(closes.length).fill(null);
+  for (let i = n - 1; i < closes.length; i++) {
+    const s = closes.slice(i - n + 1, i + 1);
+    const m = s.reduce((a, v) => a + v, 0) / n;
+    const sd = Math.sqrt(s.reduce((a, v) => a + (v - m) ** 2, 0) / n);
+    mid[i] = m; upper[i] = m + k * sd; lower[i] = m - k * sd;
+  }
+  return { upper, mid, lower };
+}
+
+/** Untere Panels (Volumen/RSI/MACD) von unten nach oben stapeln. */
+function layoutBands(ids: string[]): { margins: Record<string, { top: number; bottom: number }>; priceBottom: number } {
+  const frac: Record<string, number> = { vol: 0.15, rsi: 0.17, macd: 0.17 };
+  const gap = 0.03;
+  const margins: Record<string, { top: number; bottom: number }> = {};
+  let cum = 0;
+  for (const id of ids) {
+    const f = frac[id] ?? 0.15;
+    margins[id] = { top: 1 - (cum + f), bottom: cum };
+    cum += f + gap;
+  }
+  return { margins, priceBottom: Math.min(cum + 0.02, 0.7) };
+}
+
 /**
  * Kurschart auf Basis von TradingViews quelloffener Bibliothek
  * `lightweight-charts`: Fadenkreuz mit Achsen-Fähnchen, beschriftete Zeit- und
@@ -70,6 +128,7 @@ export default function BigChart({
   mas = [],
   maType = "sma",
   showVolume = false,
+  indicators = [],
   currency = "EUR",
   intraday = false,
   mode = "line",
@@ -81,6 +140,7 @@ export default function BigChart({
   mas?: number[];
   maType?: "sma" | "ema";
   showVolume?: boolean;
+  indicators?: string[];
   currency?: string;
   intraday?: boolean;
   mode?: "line" | "candles";
@@ -154,6 +214,19 @@ export default function BigChart({
       mainSeries = as;
     }
 
+    // Bollinger-Bänder (Overlay auf der Preisskala)
+    if (indicators.includes("boll") && data.length >= 20) {
+      const bb = bollingerSeries(data, 20, 2);
+      const mk = (arr: (number | null)[], col: string, w = 1) => {
+        const ls = chart.addLineSeries({ color: col, lineWidth: w as 1 | 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+        ls.setData(dedupe(arr.map((v, i) => (v == null ? null : { time: t[i] as UTCTimestamp, value: v })).filter(Boolean) as { time: UTCTimestamp; value: number }[]));
+        seriesRef.current.push(ls);
+      };
+      mk(bb.upper, hexA(accent, 0.55));
+      mk(bb.mid, hexA(accent, 0.35));
+      mk(bb.lower, hexA(accent, 0.55));
+    }
+
     // Gleitende Durchschnitte
     for (const p of mas) {
       if (data.length <= p) continue;
@@ -166,17 +239,46 @@ export default function BigChart({
       seriesRef.current.push(line);
     }
 
-    // Volumen als Histogramm unten
+    // Untere Panels stapeln: Volumen, RSI, MACD (je nach Auswahl)
+    const hasVol = showVolume && !!volumes && volumes.some((v) => v > 0);
+    const wantRsi = indicators.includes("rsi") && data.length >= 15;
+    const wantMacd = indicators.includes("macd") && data.length >= 26;
+    const bandIds = [...(hasVol ? ["vol"] : []), ...(wantRsi ? ["rsi"] : []), ...(wantMacd ? ["macd"] : [])];
+    const { margins, priceBottom } = layoutBands(bandIds);
+    chart.priceScale("right").applyOptions({ scaleMargins: { top: 0.06, bottom: bandIds.length ? priceBottom : 0.02 } });
+
     let volSeries: ISeriesApi<"Histogram"> | null = null;
-    if (showVolume && volumes && volumes.some((v) => v > 0)) {
+    if (hasVol && volumes) {
       const vol = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "vol" });
       vol.setData(dedupe(volumes.map((v, i) => ({
         time: t[i] as UTCTimestamp, value: v,
         color: (i > 0 && data[i] < data[i - 1]) ? hexA(DOWN, 0.5) : hexA(UP, 0.5),
       }))));
-      chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      chart.priceScale("vol").applyOptions({ scaleMargins: margins.vol });
       seriesRef.current.push(vol);
       volSeries = vol;
+    }
+
+    if (wantRsi) {
+      const r = rsiSeries(data, 14);
+      const rs = chart.addLineSeries({ priceScaleId: "rsi", color: "#a855f7", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      rs.setData(dedupe(r.map((v, i) => (v == null ? null : { time: t[i] as UTCTimestamp, value: v })).filter(Boolean) as { time: UTCTimestamp; value: number }[]));
+      chart.priceScale("rsi").applyOptions({ scaleMargins: margins.rsi });
+      rs.createPriceLine({ price: 70, color: hexA(DOWN, 0.5), lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: false });
+      rs.createPriceLine({ price: 30, color: hexA(UP, 0.5), lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: false });
+      seriesRef.current.push(rs);
+    }
+
+    if (wantMacd) {
+      const m = macdSeries(data);
+      const hist = chart.addHistogramSeries({ priceScaleId: "macd", priceFormat: { type: "price", precision: 2, minMove: 0.01 } });
+      hist.setData(dedupe(m.hist.map((v, i) => ({ time: t[i] as UTCTimestamp, value: v, color: v >= 0 ? hexA(UP, 0.5) : hexA(DOWN, 0.5) }))));
+      chart.priceScale("macd").applyOptions({ scaleMargins: margins.macd });
+      const ml = chart.addLineSeries({ priceScaleId: "macd", color: accent, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      ml.setData(dedupe(m.macd.map((v, i) => ({ time: t[i] as UTCTimestamp, value: v }))));
+      const sl = chart.addLineSeries({ priceScaleId: "macd", color: "#e8a33d", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      sl.setData(dedupe(m.signal.map((v, i) => ({ time: t[i] as UTCTimestamp, value: v }))));
+      seriesRef.current.push(hist, ml, sl);
     }
 
     chart.timeScale().fitContent();
@@ -206,7 +308,7 @@ export default function BigChart({
 
     return () => { ro.disconnect(); chart.remove(); chartRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, showVolume, mas.join(","), maType, currency, intraday, t, dataSig(data), candleSig(candles), themeTick]);
+  }, [mode, showVolume, mas.join(","), maType, indicators.join(","), currency, intraday, t, dataSig(data), candleSig(candles), themeTick]);
 
   const m = (v?: number) => (v == null ? "—" : money(v, currency));
   const cUp = legend && legend.o != null && legend.c != null ? legend.c >= legend.o : true;

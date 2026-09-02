@@ -31,6 +31,11 @@ const TFS: Tf[] = [
 ];
 const tfById = (id: string): Tf => TFS.find((t) => t.id === id) ?? TFS[4];
 const MA_OPTIONS = [20, 50, 200];
+const IND_OPTIONS = [
+  { key: "boll", label: "BB" },
+  { key: "rsi", label: "RSI" },
+  { key: "macd", label: "MACD" },
+];
 
 const LAYOUTS = [1, 2, 4] as const;
 type Layout = (typeof LAYOUTS)[number];
@@ -83,6 +88,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
   const [mas, setMas] = useState<number[]>([]);
   const [maType, setMaType] = useState<"sma" | "ema">("sma");
   const [showVol, setShowVol] = useState(false);
+  const [inds, setInds] = useState<string[]>([]);
   const [cache, setCache] = useState<Record<string, Cell>>({});
   const [watch, setWatch] = useState<string[]>([]);
   const [solo, setSolo] = useState<string | null>(null);
@@ -101,6 +107,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
         if (Array.isArray(o.mas)) setMas(o.mas.filter((p: number) => MA_OPTIONS.includes(p)));
         if (o.maType === "sma" || o.maType === "ema") setMaType(o.maType);
         if (typeof o.showVol === "boolean") setShowVol(o.showVol);
+        if (Array.isArray(o.inds)) setInds(o.inds.filter((x: string) => IND_OPTIONS.some((i) => i.key === x)));
       }
     } catch { /* egal */ }
   }, []);
@@ -123,15 +130,19 @@ export default function ChartView({ focus }: { focus: string | null }) {
   };
   useEffect(() => { readWatch(); }, [focus]);
 
-  const persist = (l: Layout, sl: string[], t: string, m: Mode, ma: number[] = mas, vol: boolean = showVol, mt: "sma" | "ema" = maType) => {
-    try { localStorage.setItem(STORE, JSON.stringify({ layout: l, slots: sl, tf: t, mode: m, mas: ma, showVol: vol, maType: mt })); } catch { /* egal */ }
+  const persist = (l: Layout, sl: string[], t: string, m: Mode, ma: number[] = mas, vol: boolean = showVol, mt: "sma" | "ema" = maType, ind: string[] = inds) => {
+    try { localStorage.setItem(STORE, JSON.stringify({ layout: l, slots: sl, tf: t, mode: m, mas: ma, showVol: vol, maType: mt, inds: ind })); } catch { /* egal */ }
   };
   const toggleMa = (p: number) => {
     const next = mas.includes(p) ? mas.filter((x) => x !== p) : [...mas, p].sort((a, b) => a - b);
-    setMas(next); persist(layout, slots, tf, mode, next, showVol, maType);
+    setMas(next); persist(layout, slots, tf, mode, next, showVol, maType, inds);
   };
-  const chooseMaType = (mt: "sma" | "ema") => { setMaType(mt); persist(layout, slots, tf, mode, mas, showVol, mt); };
-  const toggleVol = () => { const v = !showVol; setShowVol(v); persist(layout, slots, tf, mode, mas, v, maType); };
+  const chooseMaType = (mt: "sma" | "ema") => { setMaType(mt); persist(layout, slots, tf, mode, mas, showVol, mt, inds); };
+  const toggleVol = () => { const v = !showVol; setShowVol(v); persist(layout, slots, tf, mode, mas, v, maType, inds); };
+  const toggleInd = (k: string) => {
+    const next = inds.includes(k) ? inds.filter((x) => x !== k) : [...inds, k];
+    setInds(next); persist(layout, slots, tf, mode, mas, showVol, maType, next);
+  };
 
   useEffect(() => {
     if (!focus) return;
@@ -246,7 +257,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
             </div>
             {series ? (
               <>
-                <div className={s.slotChart}><BigChart data={series} candles={cell?.ohlc} times={cell?.t} volumes={cell?.volumes} mas={mas} maType={maType} showVolume={showVol} currency={cur} intraday={cell?.intraday} mode={mode} /></div>
+                <div className={s.slotChart}><BigChart data={series} candles={cell?.ohlc} times={cell?.t} volumes={cell?.volumes} mas={mas} maType={maType} showVolume={showVol} indicators={inds} currency={cur} intraday={cell?.intraday} mode={mode} /></div>
                 <div className={s.slotFoot}>
                   <span>{de(Math.min(...series))} – {de(Math.max(...series))}</span>
                   <span>{cell?.demo ? <span className={s.demoTag}>Demo-Daten</span> : `${series.length} ${def.intraday ? "Kerzen · intraday" : "Tage"}`}</span>
@@ -305,6 +316,13 @@ export default function ChartView({ focus }: { focus: string | null }) {
           ))}
         </div>
         <button className={`${s.swBtn} ${s.fsBtn} ${showVol ? s.swOn : ""}`} onClick={toggleVol} title="Handelsvolumen unter dem Chart">Vol</button>
+        <span className={s.swLabel} style={{ marginLeft: 8 }} title="Indikatoren">Indi</span>
+        <div className={s.switch} role="group" aria-label="Indikatoren">
+          {IND_OPTIONS.map((o) => (
+            <button key={o.key} className={`${s.swBtn} ${inds.includes(o.key) ? s.swOn : ""}`} onClick={() => toggleInd(o.key)}
+              title={o.key === "boll" ? "Bollinger-Bänder" : o.key === "rsi" ? "RSI (14)" : "MACD (12/26/9)"}>{o.label}</button>
+          ))}
+        </div>
         <div className={s.grow} />
         <span className={s.swLabel}>Zeitraum</span>
         <div className={s.switch} role="group" aria-label="Zeitraum">
