@@ -93,6 +93,9 @@ export function toEodhd(sym: string): string | null {
 
 /** EODHD kennt bei Intraday nur diese Auflösungen. */
 const EOD_INTERVAL: Record<string, string> = { "1m": "1m", "5m": "5m", "60m": "1h", "1h": "1h" };
+/** Kerzengrößen jenseits von Intraday: Tag, Woche, Monat. */
+export type Period = "d" | "w" | "m";
+export const isPeriod = (v: string): v is Period => v === "d" || v === "w" || v === "m";
 /** Zeitfenster je Range in Millisekunden. */
 const RANGE_MS: Record<string, number> = { "1d": 4 * 86400_000, "5d": 10 * 86400_000, "1mo": 45 * 86400_000 };
 
@@ -107,13 +110,13 @@ function requireKey(): string {
   return key;
 }
 
-/** Tageskurse. */
-async function eodhdDaily(sym: string, days: number): Promise<Series> {
+/** Tages-, Wochen- oder Monatskerzen (`period` d/w/m). */
+async function eodhdDaily(sym: string, days: number, period: Period = "d"): Promise<Series> {
   const key = requireKey();
   const t = toEodhd(sym);
   if (!t) throw new Error(`EODHD führt ${sym} nicht.`);
   const from = new Date(Date.now() - days * 1.7 * 86400_000).toISOString().slice(0, 10);
-  const url = `https://eodhd.com/api/eod/${encodeURIComponent(t)}?api_token=${key}&fmt=json&period=d&from=${from}`;
+  const url = `https://eodhd.com/api/eod/${encodeURIComponent(t)}?api_token=${key}&fmt=json&period=${period}&from=${from}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`EODHD antwortete mit ${res.status}.`);
   const rows = (await res.json()) as Array<{ date: string; open: number; high: number; low: number; close: number; volume?: number }>;
@@ -157,9 +160,9 @@ async function eodhdIntraday(sym: string, interval: string, windowMs: number): P
 
 /* ---------- Öffentliche API ---------- */
 
-/** Vollständige Tages-Kursreihe (mit Währung und Quelle). */
-export async function candlesSeries(symbol: string, days = 750): Promise<Series> {
-  return eodhdDaily(normTicker(symbol), days);
+/** Kursreihe in Tages-, Wochen- oder Monatskerzen (mit Währung und Quelle). */
+export async function candlesSeries(symbol: string, days = 750, period: Period = "d"): Promise<Series> {
+  return eodhdDaily(normTicker(symbol), days, period);
 }
 
 /** Nur die OHLC-Kerzen — für die Rechenkerne, die keine Währung brauchen. */

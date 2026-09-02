@@ -19,17 +19,21 @@ import { de, money, pct } from "@/lib/quant/num";
 const STORE = "equilux-chartview-v2";
 const WATCH = "equilux-watch-v2";
 
-interface Tf { id: string; label: string; intraday?: boolean; range?: string; interval?: string; days?: number; points: number; stepSec: number; }
+/**
+ * Kerzengrößen — nicht Chart-Zeiträume. Wie bei TradingView wählt man hier,
+ * wie lang eine Kerze ist; wie weit man zurückschaut, macht man per Zoom.
+ * `days`/`range` bestimmen nur, wie viel Historie geladen wird.
+ */
+interface Tf { id: string; label: string; intraday?: boolean; range?: string; interval?: string; days?: number; period?: "d" | "w" | "m"; points: number; stepSec: number; }
 const TFS: Tf[] = [
-  { id: "1min", label: "1Min", intraday: true, range: "1d", interval: "1m", points: 390, stepSec: 60 },
-  { id: "1t", label: "1T", intraday: true, range: "1d", interval: "5m", points: 78, stepSec: 300 },
-  { id: "5t", label: "5T", intraday: true, range: "5d", interval: "1h", points: 35, stepSec: 3600 },
-  { id: "1m", label: "1M", days: 30, points: 30, stepSec: 86400 },
-  { id: "6m", label: "6M", days: 180, points: 180, stepSec: 86400 },
-  { id: "1j", label: "1J", days: 365, points: 365, stepSec: 86400 },
-  { id: "5j", label: "5J", days: 1825, points: 520, stepSec: 86400 },
+  { id: "1m", label: "1 Min", intraday: true, range: "1d", interval: "1m", points: 390, stepSec: 60 },
+  { id: "5m", label: "5 Min", intraday: true, range: "5d", interval: "5m", points: 400, stepSec: 300 },
+  { id: "1h", label: "1 Std", intraday: true, range: "1mo", interval: "1h", points: 400, stepSec: 3600 },
+  { id: "1d", label: "1 Tag", days: 500, period: "d", points: 500, stepSec: 86400 },
+  { id: "1w", label: "1 Woche", days: 1825, period: "w", points: 260, stepSec: 604800 },
+  { id: "1mo", label: "1 Monat", days: 3650, period: "m", points: 120, stepSec: 2592000 },
 ];
-const tfById = (id: string): Tf => TFS.find((t) => t.id === id) ?? TFS[4];
+const tfById = (id: string): Tf => TFS.find((t) => t.id === id) ?? TFS[3];
 const MA_OPTIONS = [20, 50, 200];
 const IND_OPTIONS = [
   { key: "boll", label: "BB" },
@@ -84,7 +88,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
   const [mode, setMode] = useState<Mode>("line");
   const [slots, setSlots] = useState<string[]>(["SAP.DE", "ASML.AS", "SHEL.L", "AAPL"]);
   const [active, setActive] = useState(0);
-  const [tf, setTf] = useState("6m");
+  const [tf, setTf] = useState("1d");
   const [mas, setMas] = useState<number[]>([]);
   const [maType, setMaType] = useState<"sma" | "ema">("sma");
   const [showVol, setShowVol] = useState(false);
@@ -171,7 +175,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
       setCache((c) => ({ ...c, [k]: { loading: true } }));
       const qs = def.intraday
         ? `symbol=${encodeURIComponent(sym)}&range=${def.range}&interval=${def.interval}`
-        : `symbol=${encodeURIComponent(sym)}&days=${def.days}`;
+        : `symbol=${encodeURIComponent(sym)}&days=${def.days}&period=${def.period ?? "d"}`;
       fetch(`/api/quant/series?${qs}`)
         .then((r) => r.json())
         .then((j) => setCache((c) => ({
@@ -279,7 +283,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
                       <span className={s.demoTag} title="Keine Live-Daten — es fehlt ein Datenanbieter-Schlüssel oder die Quelle ist blockiert.">Demo-Daten</span>
                     ) : (
                       <>
-                        {series.length} {def.intraday ? "Kerzen" : "Tage"}
+                        {series.length} × {def.label}
                         {cell?.source && <span className={s.srcTag} title="Datenquelle dieser Kursreihe"> · {cell.source}</span>}
                       </>
                     )}
@@ -350,10 +354,11 @@ export default function ChartView({ focus }: { focus: string | null }) {
           ))}
         </div>
         <div className={s.grow} />
-        <span className={s.swLabel}>Zeitraum</span>
-        <div className={s.switch} role="group" aria-label="Zeitraum">
+        <span className={s.swLabel} title="Wie lang eine Kerze ist — den Ausschnitt wählst du per Zoom">Kerze</span>
+        <div className={s.switch} role="group" aria-label="Kerzengröße">
           {TFS.map((t) => (
-            <button key={t.id} className={`${s.swBtn} ${tf === t.id ? s.swOn : ""}`} onClick={() => chooseTf(t.id)}>{t.label}</button>
+            <button key={t.id} className={`${s.swBtn} ${tf === t.id ? s.swOn : ""}`} onClick={() => chooseTf(t.id)}
+              title={`Eine Kerze = ${t.label}`}>{t.label}</button>
           ))}
         </div>
         <button className={`${s.swBtn} ${s.fsBtn} ${fs ? s.swOn : ""}`} onClick={() => setFs((v) => !v)} title="Vollbild (Esc zum Verlassen)" aria-label="Vollbild">
