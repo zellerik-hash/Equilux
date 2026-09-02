@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DM_Sans, DM_Mono } from "next/font/google";
 import "lenis/dist/lenis.css";
 import "./globals.css";
@@ -14,6 +14,14 @@ export const metadata: Metadata = {
   title: "EQUILUX",
   description:
     "Quantitative Aktien-Workstation — stell dir dein eigenes Terminal aus Derivaten, Bewertung, Stat-Arb, SOTP, Filings und Marktbrief zusammen.",
+  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  appleWebApp: { capable: true, title: "EQUILUX", statusBarStyle: "black-translucent" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0c0e13",
+  width: "device-width",
+  initialScale: 1,
 };
 
 // Wendet die gespeicherte Theme-Wahl vor dem ersten Paint an (kein Flash).

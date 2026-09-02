@@ -300,6 +300,9 @@ export default function ChartView({ focus }: { focus: string | null }) {
             <button key={l} className={`${s.swBtn} ${layout === l && !solo ? s.swOn : ""}`} onClick={() => { setSolo(null); chooseLayout(l); }}>{l}</button>
           ))}
         </div>
+        {layout < 4 && !solo && (
+          <button className={`${s.swBtn} ${s.fsBtn}`} onClick={() => { const n = (layout === 1 ? 2 : 4) as Layout; chooseLayout(n); setActive(n - 1); }} title="Weiteren Chart hinzufügen">+ Chart</button>
+        )}
         <span className={s.swLabel} style={{ marginLeft: 8 }}>Typ</span>
         <div className={s.switch} role="group" aria-label="Chart-Typ">
           <button className={`${s.swBtn} ${mode === "line" ? s.swOn : ""}`} onClick={() => chooseMode("line")}>Linie</button>
