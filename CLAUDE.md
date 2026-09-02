@@ -29,8 +29,9 @@ Grundlagenerklärungen**. Schreib die Rechnung und benenne, wo sie bricht.
 - Next.js 14.2, React 18, TypeScript 5.5 Strict. `npx next build` muss **ohne
   Fehler und ohne Warnung** durchlaufen, bevor etwas als fertig gilt.
 - **Keine neuen Abhängigkeiten ohne Rückfrage.** Rechenkerne stdlib-only —
-  kein numpy-Ersatz, kein Statistikpaket, kein Chart-Framework. Einzige
-  Dev-Dep außerhalb des Frameworks: `tsx` (Test-Runner).
+  kein numpy-Ersatz, kein Statistikpaket. Ausnahme (auf ausdrücklichen
+  Nutzerwunsch): `lightweight-charts` (TradingViews quelloffene Chart-Lib) für
+  die Kurscharts. Dev-Dep außerhalb des Frameworks: `tsx` (Test-Runner).
 - **Kommentare und UI-Texte auf Deutsch.** Fachbegriffe englisch
   (Hedge-Ratio, Backtest, Half-Life, Greeks). Code-Bezeichner englisch.
 - **Zahlen deutsch:** Komma als Dezimaltrenner. Formatierer in
