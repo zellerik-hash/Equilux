@@ -37,7 +37,8 @@ export async function GET(req: Request) {
         intraday: !!interval,
         t: ohlc.map((c) => c.t),
         closes: ohlc.map((c) => c.c),
-        ohlc: ohlc.map((c) => ({ t: c.t, o: c.o, h: c.h, l: c.l, c: c.c })),
+        volumes: ohlc.map((c) => (typeof c.v === "number" ? c.v : 0)),
+        ohlc: ohlc.map((c) => ({ t: c.t, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v })),
       },
     });
   } catch (e) {

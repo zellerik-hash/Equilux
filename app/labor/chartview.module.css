@@ -9,6 +9,9 @@
 .readoutPrice { font: 600 13px/1 var(--font-mono-stack); color: var(--text); }
 .readoutDay { font: 400 10px/1 var(--font-mono-stack); color: var(--text-faint); }
 
+.maLegend { position: absolute; top: 10px; left: 10px; display: flex; gap: 10px; pointer-events: none; }
+.maTag { font: 600 10px/1 var(--font-mono-stack); letter-spacing: .04em; }
+
 .chartView { display: flex; flex-direction: column; gap: 14px; }
 .cvBar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .cvBar .grow { margin-left: auto; }

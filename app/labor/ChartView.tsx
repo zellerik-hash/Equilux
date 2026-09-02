@@ -20,20 +20,22 @@ const WATCH = "equilux-watch-v2";
 
 interface Tf { id: string; label: string; intraday?: boolean; range?: string; interval?: string; days?: number; points: number; stepSec: number; }
 const TFS: Tf[] = [
+  { id: "1min", label: "1Min", intraday: true, range: "1d", interval: "1m", points: 390, stepSec: 60 },
   { id: "1t", label: "1T", intraday: true, range: "1d", interval: "5m", points: 78, stepSec: 300 },
-  { id: "5t", label: "5T", intraday: true, range: "5d", interval: "30m", points: 65, stepSec: 1800 },
+  { id: "5t", label: "5T", intraday: true, range: "5d", interval: "15m", points: 130, stepSec: 900 },
   { id: "1m", label: "1M", days: 30, points: 30, stepSec: 86400 },
   { id: "6m", label: "6M", days: 180, points: 180, stepSec: 86400 },
   { id: "1j", label: "1J", days: 365, points: 365, stepSec: 86400 },
   { id: "5j", label: "5J", days: 1825, points: 520, stepSec: 86400 },
 ];
-const tfById = (id: string): Tf => TFS.find((t) => t.id === id) ?? TFS[3];
+const tfById = (id: string): Tf => TFS.find((t) => t.id === id) ?? TFS[4];
+const MA_OPTIONS = [20, 50, 200];
 
 const LAYOUTS = [1, 2, 4] as const;
 type Layout = (typeof LAYOUTS)[number];
 type Mode = "line" | "candles";
 
-interface Cell { loading?: boolean; closes?: number[]; ohlc?: Ohlc[]; t?: number[]; currency?: string; intraday?: boolean; error?: string; demo?: boolean; }
+interface Cell { loading?: boolean; closes?: number[]; ohlc?: Ohlc[]; t?: number[]; volumes?: number[]; currency?: string; intraday?: boolean; error?: string; demo?: boolean; }
 
 function demoCloses(sym: string, n: number): number[] {
   let seed = 0;
@@ -77,6 +79,8 @@ export default function ChartView({ focus }: { focus: string | null }) {
   const [slots, setSlots] = useState<string[]>(["SAP.DE", "ASML.AS", "SHEL.L", "AAPL"]);
   const [active, setActive] = useState(0);
   const [tf, setTf] = useState("6m");
+  const [mas, setMas] = useState<number[]>([]);
+  const [showVol, setShowVol] = useState(false);
   const [cache, setCache] = useState<Record<string, Cell>>({});
   const [draft, setDraft] = useState("");
   const [watch, setWatch] = useState<string[]>([]);
@@ -93,6 +97,8 @@ export default function ChartView({ focus }: { focus: string | null }) {
         if (o.mode === "line" || o.mode === "candles") setMode(o.mode);
         if (Array.isArray(o.slots)) setSlots((prev) => prev.map((v, i) => o.slots[i] ?? v));
         if (typeof o.tf === "string" && TFS.some((t) => t.id === o.tf)) setTf(o.tf);
+        if (Array.isArray(o.mas)) setMas(o.mas.filter((p: number) => MA_OPTIONS.includes(p)));
+        if (typeof o.showVol === "boolean") setShowVol(o.showVol);
       }
     } catch { /* egal */ }
   }, []);
@@ -115,9 +121,14 @@ export default function ChartView({ focus }: { focus: string | null }) {
   };
   useEffect(() => { readWatch(); }, [focus]);
 
-  const persist = (l: Layout, sl: string[], t: string, m: Mode) => {
-    try { localStorage.setItem(STORE, JSON.stringify({ layout: l, slots: sl, tf: t, mode: m })); } catch { /* egal */ }
+  const persist = (l: Layout, sl: string[], t: string, m: Mode, ma: number[] = mas, vol: boolean = showVol) => {
+    try { localStorage.setItem(STORE, JSON.stringify({ layout: l, slots: sl, tf: t, mode: m, mas: ma, showVol: vol })); } catch { /* egal */ }
   };
+  const toggleMa = (p: number) => {
+    const next = mas.includes(p) ? mas.filter((x) => x !== p) : [...mas, p].sort((a, b) => a - b);
+    setMas(next); persist(layout, slots, tf, mode, next, showVol);
+  };
+  const toggleVol = () => { const v = !showVol; setShowVol(v); persist(layout, slots, tf, mode, mas, v); };
 
   useEffect(() => {
     if (!focus) return;
@@ -152,7 +163,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
         .then((j) => setCache((c) => ({
           ...c,
           [k]: j.ok
-            ? { closes: j.data.closes, ohlc: j.data.ohlc, t: j.data.t, currency: j.data.currency, intraday: j.data.intraday }
+            ? { closes: j.data.closes, ohlc: j.data.ohlc, t: j.data.t, volumes: j.data.volumes, currency: j.data.currency, intraday: j.data.intraday }
             : { error: j.error || "Abruf fehlgeschlagen" },
         })))
         .catch(() => setCache((c) => ({ ...c, [k]: { error: "Keine Verbindung" } })))
@@ -173,7 +184,8 @@ export default function ChartView({ focus }: { focus: string | null }) {
   const loadDemo = (sym: string) => {
     const def = tfById(tf);
     const cl = demoCloses(sym, def.points);
-    setCache((c) => ({ ...c, [keyOf(sym)]: { demo: true, closes: cl, ohlc: toOhlc(cl), t: demoTimes(cl.length, def.stepSec), currency: guessCurrency(sym), intraday: def.intraday } }));
+    const vol = cl.map((_, i) => Math.round(400 + Math.abs(Math.sin(i * 1.3) * 600) + (i % 7) * 90));
+    setCache((c) => ({ ...c, [keyOf(sym)]: { demo: true, closes: cl, ohlc: toOhlc(cl), t: demoTimes(cl.length, def.stepSec), volumes: vol, currency: guessCurrency(sym), intraday: def.intraday } }));
   };
   // Rechtsklick in der Einzelansicht: zweiten Chart aufmachen und belegen lassen.
   const onSlotContext = (i: number, e: React.MouseEvent) => {
@@ -231,7 +243,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
             </div>
             {series ? (
               <>
-                <div className={s.slotChart}><BigChart data={series} candles={cell?.ohlc} times={cell?.t} currency={cur} intraday={cell?.intraday} mode={mode} /></div>
+                <div className={s.slotChart}><BigChart data={series} candles={cell?.ohlc} times={cell?.t} volumes={cell?.volumes} mas={mas} showVolume={showVol} currency={cur} intraday={cell?.intraday} mode={mode} /></div>
                 <div className={s.slotFoot}>
                   <span>{de(Math.min(...series))} – {de(Math.max(...series))}</span>
                   <span>{cell?.demo ? <span className={s.demoTag}>Demo-Daten</span> : `${series.length} ${def.intraday ? "Kerzen · intraday" : "Tage"}`}</span>
@@ -284,6 +296,13 @@ export default function ChartView({ focus }: { focus: string | null }) {
           <button className={`${s.swBtn} ${mode === "line" ? s.swOn : ""}`} onClick={() => chooseMode("line")}>Linie</button>
           <button className={`${s.swBtn} ${mode === "candles" ? s.swOn : ""}`} onClick={() => chooseMode("candles")}>Kerzen</button>
         </div>
+        <span className={s.swLabel} style={{ marginLeft: 8 }} title="Gleitender Durchschnitt">Ø-Linie</span>
+        <div className={s.switch} role="group" aria-label="Gleitende Durchschnitte">
+          {MA_OPTIONS.map((p) => (
+            <button key={p} className={`${s.swBtn} ${mas.includes(p) ? s.swOn : ""}`} onClick={() => toggleMa(p)} title={`Gleitender Durchschnitt über ${p} Perioden`}>{p}</button>
+          ))}
+        </div>
+        <button className={`${s.swBtn} ${s.fsBtn} ${showVol ? s.swOn : ""}`} onClick={toggleVol} title="Handelsvolumen unter dem Chart">Vol</button>
         <div className={s.grow} />
         <span className={s.swLabel}>Zeitraum</span>
         <div className={s.switch} role="group" aria-label="Zeitraum">
