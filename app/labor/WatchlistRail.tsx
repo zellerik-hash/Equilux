@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import s from "./labor.module.css";
 import Logo from "./Logo";
 import SymbolSearch from "./SymbolSearch";
+import TickerInput from "./TickerInput";
 import { metaFor, marketOf, MARKETS, type Market } from "./symbols";
 
 /**
@@ -39,7 +40,6 @@ export default function WatchlistRail({
   onCollapse?: () => void;
 }) {
   const [items, setItems] = useState<Item[]>(DEFAULT);
-  const [draft, setDraft] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
@@ -68,7 +68,6 @@ export default function WatchlistRail({
     if (!items.some((i) => i.symbol === sym)) save([...items, { symbol: sym, cat: marketOf(sym) }]);
     onFocus(sym);
   };
-  const addFromDraft = () => { addSymbol(draft); setDraft(""); };
   const remove = (sym: string) => save(items.filter((i) => i.symbol !== sym));
 
   const grouped = useMemo(
@@ -89,16 +88,7 @@ export default function WatchlistRail({
         <button className={s.railSearchBtn} onClick={() => setSearchOpen(true)}>
           <span className={s.railSearchIcon}>⌕</span> Märkte durchsuchen
         </button>
-        <div className={s.railAddRow}>
-          <input
-            className={s.railInput}
-            value={draft}
-            placeholder="Schnell: Kürzel + Enter"
-            onChange={(e) => setDraft(e.target.value.toUpperCase())}
-            onKeyDown={(e) => e.key === "Enter" && addFromDraft()}
-            aria-label="Titel schnell hinzufügen"
-          />
-        </div>
+        <TickerInput onPick={addSymbol} placeholder="Kürzel eingeben …" />
       </div>
 
       {grouped.length === 0 ? (

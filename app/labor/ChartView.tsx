@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import s from "./chartview.module.css";
 import BigChart, { type Ohlc } from "./BigChart";
 import Logo from "./Logo";
+import TickerInput from "./TickerInput";
 import { metaFor } from "./symbols";
 import { de, money, pct } from "@/lib/quant/num";
 
@@ -83,7 +84,6 @@ export default function ChartView({ focus }: { focus: string | null }) {
   const [maType, setMaType] = useState<"sma" | "ema">("sma");
   const [showVol, setShowVol] = useState(false);
   const [cache, setCache] = useState<Record<string, Cell>>({});
-  const [draft, setDraft] = useState("");
   const [watch, setWatch] = useState<string[]>([]);
   const [solo, setSolo] = useState<string | null>(null);
   const [fs, setFs] = useState(false);
@@ -271,14 +271,9 @@ export default function ChartView({ focus }: { focus: string | null }) {
                 ))}
               </div>
             )}
-            <input
-              className={s.slotInput}
-              placeholder="z. B. NVDA"
-              value={active === i ? draft : ""}
-              onFocus={() => setActive(i)}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) { setSlot(i, draft); setDraft(""); } }}
-            />
+            <div className={s.slotInputWrap} onClick={(e) => e.stopPropagation()}>
+              <TickerInput onPick={(sym) => setSlot(i, sym)} onFocus={() => setActive(i)} placeholder="z. B. NVDA" />
+            </div>
           </div>
         )}
       </div>
