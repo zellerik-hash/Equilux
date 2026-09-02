@@ -37,6 +37,23 @@ function sma(values: number[], period: number): (number | null)[] {
   return out;
 }
 
+/** Exponentiell gewichteter Durchschnitt; mit SMA der ersten Periode angesetzt. */
+function ema(values: number[], period: number): (number | null)[] {
+  const out: (number | null)[] = new Array(values.length).fill(null);
+  if (values.length < period) return out;
+  const k = 2 / (period + 1);
+  let prev = 0;
+  for (let i = 0; i < period; i++) prev += values[i];
+  prev /= period;
+  out[period - 1] = prev;
+  for (let i = period; i < values.length; i++) { prev = values[i] * k + prev * (1 - k); out[i] = prev; }
+  return out;
+}
+
+function movingAvg(values: number[], period: number, type: "sma" | "ema"): (number | null)[] {
+  return type === "ema" ? ema(values, period) : sma(values, period);
+}
+
 /**
  * Kurschart auf Basis von TradingViews quelloffener Bibliothek
  * `lightweight-charts`: Fadenkreuz mit Achsen-Fähnchen, beschriftete Zeit- und
@@ -49,6 +66,7 @@ export default function BigChart({
   times,
   volumes,
   mas = [],
+  maType = "sma",
   showVolume = false,
   currency = "EUR",
   intraday = false,
@@ -59,6 +77,7 @@ export default function BigChart({
   times?: number[];
   volumes?: number[];
   mas?: number[];
+  maType?: "sma" | "ema";
   showVolume?: boolean;
   currency?: string;
   intraday?: boolean;
@@ -130,7 +149,7 @@ export default function BigChart({
     // Gleitende Durchschnitte
     for (const p of mas) {
       if (data.length <= p) continue;
-      const vals = sma(data, p);
+      const vals = movingAvg(data, p, maType);
       const line = chart.addLineSeries({
         color: MA_COLORS[p] ?? "#9aa4bd", lineWidth: 1, lineStyle: LineStyle.Solid, priceLineVisible: false, lastValueVisible: false,
       });
@@ -158,7 +177,7 @@ export default function BigChart({
 
     return () => { ro.disconnect(); chart.remove(); chartRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, showVolume, mas.join(","), currency, intraday, t, dataSig(data), candleSig(candles), themeTick]);
+  }, [mode, showVolume, mas.join(","), maType, currency, intraday, t, dataSig(data), candleSig(candles), themeTick]);
 
   return (
     <div className={s.bigWrap}>
@@ -166,7 +185,7 @@ export default function BigChart({
       {mas.length > 0 && (
         <div className={s.maLegend}>
           {mas.filter((p) => data.length > p).map((p) => (
-            <span key={p} className={s.maTag} style={{ color: MA_COLORS[p] ?? "var(--text-dim)" }}>MA{p}</span>
+            <span key={p} className={s.maTag} style={{ color: MA_COLORS[p] ?? "var(--text-dim)" }}>{maType === "ema" ? "EMA" : "MA"}{p}</span>
           ))}
         </div>
       )}

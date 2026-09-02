@@ -80,6 +80,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
   const [active, setActive] = useState(0);
   const [tf, setTf] = useState("6m");
   const [mas, setMas] = useState<number[]>([]);
+  const [maType, setMaType] = useState<"sma" | "ema">("sma");
   const [showVol, setShowVol] = useState(false);
   const [cache, setCache] = useState<Record<string, Cell>>({});
   const [draft, setDraft] = useState("");
@@ -98,6 +99,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
         if (Array.isArray(o.slots)) setSlots((prev) => prev.map((v, i) => o.slots[i] ?? v));
         if (typeof o.tf === "string" && TFS.some((t) => t.id === o.tf)) setTf(o.tf);
         if (Array.isArray(o.mas)) setMas(o.mas.filter((p: number) => MA_OPTIONS.includes(p)));
+        if (o.maType === "sma" || o.maType === "ema") setMaType(o.maType);
         if (typeof o.showVol === "boolean") setShowVol(o.showVol);
       }
     } catch { /* egal */ }
@@ -121,14 +123,15 @@ export default function ChartView({ focus }: { focus: string | null }) {
   };
   useEffect(() => { readWatch(); }, [focus]);
 
-  const persist = (l: Layout, sl: string[], t: string, m: Mode, ma: number[] = mas, vol: boolean = showVol) => {
-    try { localStorage.setItem(STORE, JSON.stringify({ layout: l, slots: sl, tf: t, mode: m, mas: ma, showVol: vol })); } catch { /* egal */ }
+  const persist = (l: Layout, sl: string[], t: string, m: Mode, ma: number[] = mas, vol: boolean = showVol, mt: "sma" | "ema" = maType) => {
+    try { localStorage.setItem(STORE, JSON.stringify({ layout: l, slots: sl, tf: t, mode: m, mas: ma, showVol: vol, maType: mt })); } catch { /* egal */ }
   };
   const toggleMa = (p: number) => {
     const next = mas.includes(p) ? mas.filter((x) => x !== p) : [...mas, p].sort((a, b) => a - b);
-    setMas(next); persist(layout, slots, tf, mode, next, showVol);
+    setMas(next); persist(layout, slots, tf, mode, next, showVol, maType);
   };
-  const toggleVol = () => { const v = !showVol; setShowVol(v); persist(layout, slots, tf, mode, mas, v); };
+  const chooseMaType = (mt: "sma" | "ema") => { setMaType(mt); persist(layout, slots, tf, mode, mas, showVol, mt); };
+  const toggleVol = () => { const v = !showVol; setShowVol(v); persist(layout, slots, tf, mode, mas, v, maType); };
 
   useEffect(() => {
     if (!focus) return;
@@ -243,7 +246,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
             </div>
             {series ? (
               <>
-                <div className={s.slotChart}><BigChart data={series} candles={cell?.ohlc} times={cell?.t} volumes={cell?.volumes} mas={mas} showVolume={showVol} currency={cur} intraday={cell?.intraday} mode={mode} /></div>
+                <div className={s.slotChart}><BigChart data={series} candles={cell?.ohlc} times={cell?.t} volumes={cell?.volumes} mas={mas} maType={maType} showVolume={showVol} currency={cur} intraday={cell?.intraday} mode={mode} /></div>
                 <div className={s.slotFoot}>
                   <span>{de(Math.min(...series))} – {de(Math.max(...series))}</span>
                   <span>{cell?.demo ? <span className={s.demoTag}>Demo-Daten</span> : `${series.length} ${def.intraday ? "Kerzen · intraday" : "Tage"}`}</span>
@@ -297,9 +300,13 @@ export default function ChartView({ focus }: { focus: string | null }) {
           <button className={`${s.swBtn} ${mode === "candles" ? s.swOn : ""}`} onClick={() => chooseMode("candles")}>Kerzen</button>
         </div>
         <span className={s.swLabel} style={{ marginLeft: 8 }} title="Gleitender Durchschnitt">Ø-Linie</span>
-        <div className={s.switch} role="group" aria-label="Gleitende Durchschnitte">
+        <div className={s.switch} role="group" aria-label="Durchschnitts-Typ">
+          <button className={`${s.swBtn} ${maType === "sma" ? s.swOn : ""}`} onClick={() => chooseMaType("sma")} title="Einfacher gleitender Durchschnitt">SMA</button>
+          <button className={`${s.swBtn} ${maType === "ema" ? s.swOn : ""}`} onClick={() => chooseMaType("ema")} title="Exponentieller gleitender Durchschnitt">EMA</button>
+        </div>
+        <div className={s.switch} role="group" aria-label="Perioden">
           {MA_OPTIONS.map((p) => (
-            <button key={p} className={`${s.swBtn} ${mas.includes(p) ? s.swOn : ""}`} onClick={() => toggleMa(p)} title={`Gleitender Durchschnitt über ${p} Perioden`}>{p}</button>
+            <button key={p} className={`${s.swBtn} ${mas.includes(p) ? s.swOn : ""}`} onClick={() => toggleMa(p)} title={`${maType === "ema" ? "EMA" : "SMA"} über ${p} Perioden`}>{p}</button>
           ))}
         </div>
         <button className={`${s.swBtn} ${s.fsBtn} ${showVol ? s.swOn : ""}`} onClick={toggleVol} title="Handelsvolumen unter dem Chart">Vol</button>
