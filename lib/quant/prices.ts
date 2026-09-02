@@ -214,6 +214,12 @@ const TD_INTERVAL: Record<string, string> = { "1m": "1min", "5m": "5min", "15m":
 
 /* ---------- Polygon.io (einzige Quelle mit echten Sekundenkerzen) ---------- */
 
+/** US-Indizes, die Polygon unter `I:` führt. */
+const PG_INDEX: Record<string, string> = {
+  "^GSPC": "I:SPX", "^DJI": "I:DJI", "^IXIC": "I:COMP", "^NDX": "I:NDX",
+  "^VIX": "I:VIX", "^RUT": "I:RUT",
+};
+
 /** Yahoo-Symbol → Polygon-Ticker. null, wenn Polygon den Titel nicht führt. */
 function toPolygon(sym: string): string | null {
   const u = sym.toUpperCase();
@@ -221,9 +227,10 @@ function toPolygon(sym: string): string | null {
   if (cx) return `X:${cx[1]}${cx[2] === "USDT" ? "USD" : cx[2]}`;
   const fx = u.match(/^([A-Z]{3})([A-Z]{3})=X$/);
   if (fx) return `C:${fx[1]}${fx[2]}`;
-  if (u.startsWith("^") || u.endsWith("=F")) return null;   // Indizes/Futures: eigene Tarife
-  if (u.includes(".")) return null;                          // Nicht-US-Börsen deckt Polygon nicht ab
-  return u;                                                  // US-Aktien/ETFs
+  if (u.startsWith("^")) return PG_INDEX[u] ?? null;         // nur US-Indizes
+  if (u.endsWith("=F")) return null;                         // Futures: eigenes Produkt
+  if (u.includes(".")) return null;                          // Nicht-US-Börsen führt Polygon nicht
+  return u;                                                  // US-Aktien/ETFs/ADRs
 }
 
 /** Polygon-Intervall aus unserem Kürzel. */

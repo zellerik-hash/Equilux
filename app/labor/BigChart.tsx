@@ -172,6 +172,7 @@ export default function BigChart({
         textColor: text,
         fontFamily: "var(--font-mono-stack)",
         fontSize: 11,
+        attributionLogo: false,   // kein TradingView-Logo im Chart
       },
       grid: { vertLines: { color: grid }, horzLines: { color: grid } },
       crosshair: { mode: CrosshairMode.Normal },

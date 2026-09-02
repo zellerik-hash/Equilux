@@ -5,7 +5,7 @@ import s from "./chartview.module.css";
 import BigChart, { type Ohlc } from "./BigChart";
 import Logo from "./Logo";
 import TickerInput from "./TickerInput";
-import { metaFor } from "./symbols";
+import { metaFor, venuesFor } from "./symbols";
 import { de, money, pct } from "@/lib/quant/num";
 
 /**
@@ -242,6 +242,20 @@ export default function ChartView({ focus }: { focus: string | null }) {
                 <span className={s.slotSym}>{sym}</span>
                 <span className={s.slotName}>{meta?.name}</span>
               </span>
+              {venuesFor(sym).length > 1 && (
+                <select
+                  className={s.venueSel}
+                  value={sym}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => { const v = e.target.value; if (isSolo) setSolo(v); else setSlot(i, v); }}
+                  title="Handelsplatz wählen"
+                  aria-label="Handelsplatz"
+                >
+                  {venuesFor(sym).map((v) => (
+                    <option key={v.symbol} value={v.symbol}>{v.venue}</option>
+                  ))}
+                </select>
+              )}
               <span className={s.slotLast}>
                 {last != null && <span className={s.slotPrice}>{money(last, cur)}</span>}
                 {change != null && (
