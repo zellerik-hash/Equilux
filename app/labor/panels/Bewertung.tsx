@@ -37,6 +37,33 @@ export default function Bewertung() {
   const num = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF({ ...f, [k]: e.target.value === "" ? 0 : Number(e.target.value) });
 
+  // Kennzahlen je Ticker automatisch laden (falls Datenanbieter angebunden).
+  const [ticker, setTicker] = useState("AAPL");
+  const [fBusy, setFBusy] = useState(false);
+  const [fMsg, setFMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  async function loadFundamentals() {
+    const sym = ticker.trim().toUpperCase();
+    if (!sym) return;
+    setFBusy(true); setFMsg(null);
+    try {
+      const r = await fetch(`/api/quant/fundamentals?symbol=${encodeURIComponent(sym)}`);
+      const j = await r.json();
+      if (!j.ok) { setFMsg({ ok: false, text: j.error || "Abruf fehlgeschlagen." }); return; }
+      const d = j.data ?? {};
+      setF((prev) => ({
+        ...prev,
+        price: Number.isFinite(d.price) ? d.price : prev.price,
+        eps: Number.isFinite(d.eps) ? d.eps : prev.eps,
+        bvps: Number.isFinite(d.bvps) ? d.bvps : prev.bvps,
+        div: Number.isFinite(d.div) ? d.div : prev.div,
+        beta: Number.isFinite(d.beta) ? d.beta : prev.beta,
+      }));
+      setFMsg({ ok: true, text: `Übernommen für ${sym}: ${(j.got ?? []).join(", ") || "—"}. Restliche Felder bitte prüfen/ergänzen.` });
+    } catch {
+      setFMsg({ ok: false, text: "Keine Verbindung zum Datenanbieter." });
+    } finally { setFBusy(false); }
+  }
+
   const input: ValuationInput = {
     eps: f.eps, bvps: f.bvps, fcf: f.fcf, div: f.div,
     g1: f.g1 / 100, g2: f.g2 / 100, g3: f.g3 / 100,
@@ -55,6 +82,18 @@ export default function Bewertung() {
           <b> Abweichung vom aktuellen Kurs</b>. Kein Kursziel, keine Empfehlung.
         </p>
       )}
+      <div className={s.identRow}>
+        <label className={s.field} style={{ flex: "1 1 200px" }}>
+          <span>Ticker für Auto-Kennzahlen</span>
+          <input value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === "Enter" && loadFundamentals()} placeholder="z. B. AAPL" />
+        </label>
+        <button className={s.ghost} onClick={loadFundamentals} disabled={fBusy || !ticker.trim()}>
+          {fBusy ? "lädt …" : "Kennzahlen laden"}
+        </button>
+      </div>
+      {fMsg && <p className={fMsg.ok ? s.note : s.warn}>{fMsg.text}</p>}
+
       <div className={s.grid}>
         <Field label="Gewinn je Aktie (EPS)" value={f.eps} onChange={num("eps")} step="0.01" />
         <Field label="Buchwert je Aktie" value={f.bvps} onChange={num("bvps")} step="0.01" />
