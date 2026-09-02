@@ -1,11 +1,11 @@
 /**
  * EQUILUX — Kursbeschaffung für die Rechenkerne.
  *
- * Abrufkette, jeweils mit stillem Rückfall auf die nächste Stufe:
- *   Databento → Polygon → Twelve Data → Yahoo → Stooq
- * Die ersten drei brauchen einen Schlüssel und sind aus Rechenzentren (Vercel)
- * nutzbar; Yahoo blockt dort oft, Stooq liefert nur Tageskurse. Jede Reihe
- * trägt ihre Quelle mit, damit die Oberfläche zeigen kann, woher sie stammt.
+ * Eine einzige Quelle: EODHD. Sie deckt US-Titel, Xetra, London, Euronext,
+ * Krypto, Forex und Indizes ab und liefert auch die Fundamentaldaten. Nötig
+ * ist dafür `EODHD_API_KEY`; ohne Schlüssel gibt es keine Kurse (die
+ * Oberfläche bietet dann Demo-Daten an).
+ *
  * Die Rechenkerne interessiert nur, dass sie Schlusskurse bzw. OHLC-Kerzen in
  * chronologischer Reihenfolge bekommen.
  */
@@ -13,7 +13,7 @@
 const cache = new Map<string, { at: number; data: number[] }>();
 const TTL_MS = 10 * 60 * 1000;
 
-/** Yahoo-Suffixe, die Broker verwenden, aber Yahoo nicht kennt. */
+/** Börsen-Suffixe, die Broker verwenden, aber unser Katalog anders schreibt. */
 const SUFFIX_FIX: Record<string, string> = {
   ".FRK": ".DE", ".DEX": ".DE", ".ETR": ".DE", ".GER": ".DE",
   ".LSE": ".L", ".LON": ".L", ".PAR": ".PA", ".AMS": ".AS", ".SWX": ".SW",
@@ -47,11 +47,7 @@ export interface Series {
   source: string;
 }
 
-function rangeFor(days: number): string {
-  return days <= 260 ? "1y" : days <= 520 ? "2y" : days <= 1300 ? "5y" : "10y";
-}
-
-/** Notierungswährung aus dem Yahoo-Suffix (Fallback, wenn Yahoo keine liefert). */
+/** Notierungswährung aus dem Börsen-Suffix. */
 const CUR_BY_SUFFIX: Record<string, string> = {
   ".DE": "EUR", ".AS": "EUR", ".PA": "EUR", ".MI": "EUR", ".MC": "EUR",
   ".BR": "EUR", ".LS": "EUR", ".VI": "EUR", ".F": "EUR", ".HE": "EUR", ".IR": "EUR",
@@ -68,161 +64,9 @@ export function currencyFromSuffix(sym: string): string {
   return "USD";                                     // ohne Suffix: US-Titel
 }
 
-/* ---------- Yahoo ---------- */
+/* ---------- EODHD ---------- */
 
-/** Roh-Chart von Yahoo für beliebiges range/interval (Tages- wie Intraday). */
-async function yahooChart(sym: string, range: string, interval: string): Promise<Series> {
-  const url =
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}` +
-    `?range=${range}&interval=${interval}`;
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36",
-      Accept: "application/json",
-    },
-  });
-  if (!res.ok) throw new Error(`Yahoo ${res.status}`);
-
-  const json = (await res.json()) as {
-    chart?: { result?: Array<{
-      meta?: { currency?: string };
-      timestamp?: number[];
-      indicators?: { quote?: Array<{
-        open?: (number | null)[]; high?: (number | null)[];
-        low?: (number | null)[]; close?: (number | null)[]; volume?: (number | null)[];
-      }> };
-    }> };
-  };
-  const r = json.chart?.result?.[0];
-  const q = r?.indicators?.quote?.[0];
-  const ts = r?.timestamp ?? [];
-  const out: OHLC[] = [];
-  for (let i = 0; i < ts.length; i++) {
-    const o = q?.open?.[i], h = q?.high?.[i], l = q?.low?.[i], c = q?.close?.[i];
-    if (typeof o === "number" && typeof h === "number" && typeof l === "number" && typeof c === "number" && c > 0) {
-      out.push({ t: ts[i], o, h, l, c, v: typeof q?.volume?.[i] === "number" ? q!.volume![i]! : undefined });
-    }
-  }
-  if (out.length === 0) throw new Error("Yahoo leer");
-  return { ohlc: out, currency: r?.meta?.currency || currencyFromSuffix(sym), source: "Yahoo" };
-}
-
-async function yahooCandles(sym: string, days: number): Promise<Series> {
-  const s = await yahooChart(sym, rangeFor(days), "1d");
-  return { ohlc: s.ohlc.slice(-days), currency: s.currency, source: s.source };
-}
-
-/* ---------- Stooq (Fallback) ---------- */
-
-/** Yahoo-Endung → Stooq-Endung. Länderbörsen und plain US-Ticker. */
-const STOOQ_SUFFIX: Record<string, string> = {
-  ".DE": ".de", ".L": ".uk", ".PA": ".fr", ".AS": ".nl", ".SW": ".ch",
-  ".MI": ".it", ".MC": ".es", ".BR": ".be", ".LS": ".pt", ".VI": ".at",
-  ".ST": ".se", ".HE": ".fi", ".CO": ".dk", ".OL": ".no", ".TO": ".ca",
-};
-
-/**
- * Bildet einen Yahoo-Ticker auf ein Stooq-Symbol ab. Gibt null zurück, wenn
- * Stooq den Titel sicher nicht führt (Indizes `^…`, Krypto `…-USD`), damit wir
- * keine falsche Reihe zurückliefern.
- */
-function toStooq(sym: string): string | null {
-  if (sym.startsWith("^") || sym.endsWith("-USD") || sym.endsWith("=X")) return null;
-  for (const [yh, st] of Object.entries(STOOQ_SUFFIX)) {
-    if (sym.endsWith(yh)) return sym.slice(0, -yh.length).toLowerCase() + st;
-  }
-  // Kein Länder-Suffix → als US-Titel behandeln.
-  if (!sym.includes(".")) return sym.toLowerCase() + ".us";
-  return null;
-}
-
-async function stooqCandles(sym: string, days: number): Promise<Series> {
-  const s = toStooq(sym);
-  if (!s) throw new Error(`Stooq kennt ${sym} nicht.`);
-  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(s)}&i=d`;
-  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!res.ok) throw new Error(`Stooq ${res.status}`);
-  const text = await res.text();
-  // Fehlerfall: Stooq liefert "No data" o. Ä. statt CSV.
-  if (!text.startsWith("Date")) throw new Error(`Stooq ohne Daten für ${s}.`);
-
-  const lines = text.trim().split(/\r?\n/).slice(1);
-  const out: OHLC[] = [];
-  for (const line of lines) {
-    const [date, o, h, l, c, v] = line.split(",");
-    const co = +o, ch = +h, cl = +l, cc = +c;
-    if (Number.isFinite(co) && Number.isFinite(ch) && Number.isFinite(cl) && Number.isFinite(cc) && cc > 0) {
-      out.push({
-        t: Math.floor(new Date(date).getTime() / 1000),
-        o: co, h: ch, l: cl, c: cc,
-        v: Number.isFinite(+v) ? +v : undefined,
-      });
-    }
-  }
-  if (out.length === 0) throw new Error(`Stooq-CSV leer für ${s}.`);
-  return { ohlc: out.slice(-days), currency: currencyFromSuffix(sym), source: "Stooq" };
-}
-
-/* ---------- Datenanbieter (Twelve Data, optional per Schlüssel) ---------- */
-
-/** Yahoo-Symbol → Twelve-Data-Abfrage. null, wenn nicht sinnvoll abbildbar. */
-const TD_EXCHANGE: Record<string, string> = {
-  ".DE": "XETRA", ".L": "LSE", ".AS": "Euronext", ".PA": "Euronext",
-  ".MI": "MTA", ".MC": "BME", ".SW": "SIX", ".BR": "Euronext", ".LS": "Euronext",
-  ".HE": "OMX", ".ST": "OMX", ".CO": "OMX", ".OL": "OSE", ".VI": "VSE", ".IR": "ISE",
-};
-function toTwelve(sym: string): { symbol: string; exchange?: string } | null {
-  const u = sym.toUpperCase();
-  if (u.startsWith("^") || u.endsWith("=F")) return null;          // Indizes/Futures → Yahoo
-  const cx = u.match(/^([A-Z]{3})-(USD|EUR|USDT)$/);
-  if (cx) return { symbol: `${cx[1]}/${cx[2] === "USDT" ? "USD" : cx[2]}` };
-  const fx = u.match(/^([A-Z]{3})([A-Z]{3})=X$/);
-  if (fx) return { symbol: `${fx[1]}/${fx[2]}` };
-  const dot = u.lastIndexOf(".");
-  if (dot >= 0) {
-    const ex = TD_EXCHANGE[u.slice(dot)];
-    return ex ? { symbol: u.slice(0, dot), exchange: ex } : null;
-  }
-  return { symbol: u };                                            // US-Titel
-}
-
-/** Kursreihe von Twelve Data (nur wenn TWELVEDATA_API_KEY gesetzt ist). */
-async function twelveSeries(sym: string, interval: string, outputsize: number): Promise<Series> {
-  const key = process.env.TWELVEDATA_API_KEY;
-  if (!key) throw new Error("kein Twelve-Data-Schlüssel");
-  const q = toTwelve(sym);
-  if (!q) throw new Error(`Twelve führt ${sym} nicht sinnvoll.`);
-  const url =
-    `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(q.symbol)}` +
-    (q.exchange ? `&exchange=${encodeURIComponent(q.exchange)}` : "") +
-    `&interval=${interval}&outputsize=${Math.min(outputsize, 5000)}&format=JSON&apikey=${key}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Twelve ${res.status}`);
-  const json = (await res.json()) as {
-    status?: string; message?: string;
-    meta?: { currency?: string };
-    values?: Array<{ datetime: string; open: string; high: string; low: string; close: string; volume?: string }>;
-  };
-  if (json.status === "error" || !json.values?.length) throw new Error(json.message || "Twelve leer");
-  // Twelve liefert neueste zuerst → umdrehen.
-  const rows = [...json.values].reverse();
-  const out: OHLC[] = [];
-  for (const r of rows) {
-    const o = +r.open, h = +r.high, l = +r.low, c = +r.close;
-    if (Number.isFinite(o) && Number.isFinite(h) && Number.isFinite(l) && Number.isFinite(c) && c > 0) {
-      out.push({ t: Math.floor(new Date(r.datetime.replace(" ", "T") + "Z").getTime() / 1000), o, h, l, c, v: r.volume ? +r.volume : undefined });
-    }
-  }
-  if (out.length === 0) throw new Error("Twelve ohne verwertbare Zeilen");
-  return { ohlc: out, currency: json.meta?.currency || currencyFromSuffix(sym), source: "Twelve Data" };
-}
-
-const TD_INTERVAL: Record<string, string> = { "1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "60m": "1h", "1h": "1h" };
-
-/* ---------- EODHD (breiteste Abdeckung aus einer Hand) ---------- */
-
-/** Yahoo-Endung → EODHD-Börsenkürzel. */
+/** Unser Suffix → EODHD-Börsenkürzel. */
 const EOD_EXCHANGE: Record<string, string> = {
   ".DE": "XETRA", ".L": "LSE", ".PA": "PA", ".AS": "AS", ".MI": "MI", ".MC": "MC",
   ".SW": "SW", ".BR": "BR", ".LS": "LS", ".VI": "VI", ".ST": "ST", ".HE": "HE",
@@ -249,209 +93,73 @@ export function toEodhd(sym: string): string | null {
 
 /** EODHD kennt bei Intraday nur diese Auflösungen. */
 const EOD_INTERVAL: Record<string, string> = { "1m": "1m", "5m": "5m", "60m": "1h", "1h": "1h" };
+/** Zeitfenster je Range in Millisekunden. */
+const RANGE_MS: Record<string, number> = { "1d": 4 * 86400_000, "5d": 10 * 86400_000, "1mo": 45 * 86400_000 };
 
-/** Tageskurse von EODHD. */
-async function eodhdDaily(sym: string, days: number): Promise<Series> {
+function requireKey(): string {
   const key = process.env.EODHD_API_KEY;
-  if (!key) throw new Error("kein EODHD-Schlüssel");
+  if (!key) {
+    throw new Error(
+      "Keine Kursdaten: EODHD_API_KEY ist nicht gesetzt. Schlüssel bei eodhd.com holen und " +
+      "als Umgebungsvariable hinterlegen, dann laden die Charts live.",
+    );
+  }
+  return key;
+}
+
+/** Tageskurse. */
+async function eodhdDaily(sym: string, days: number): Promise<Series> {
+  const key = requireKey();
   const t = toEodhd(sym);
   if (!t) throw new Error(`EODHD führt ${sym} nicht.`);
   const from = new Date(Date.now() - days * 1.7 * 86400_000).toISOString().slice(0, 10);
   const url = `https://eodhd.com/api/eod/${encodeURIComponent(t)}?api_token=${key}&fmt=json&period=d&from=${from}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`EODHD ${res.status}`);
+  if (!res.ok) throw new Error(`EODHD antwortete mit ${res.status}.`);
   const rows = (await res.json()) as Array<{ date: string; open: number; high: number; low: number; close: number; volume?: number }>;
-  if (!Array.isArray(rows) || rows.length === 0) throw new Error("EODHD ohne Daten");
+  if (!Array.isArray(rows) || rows.length === 0) throw new Error(`EODHD hat keine Tageskurse für ${sym}.`);
   const out: OHLC[] = [];
   for (const r of rows) {
     if (!Number.isFinite(r.close) || r.close <= 0) continue;
     out.push({ t: Math.floor(new Date(`${r.date}T00:00:00Z`).getTime() / 1000), o: r.open, h: r.high, l: r.low, c: r.close, v: r.volume });
   }
-  if (out.length === 0) throw new Error("EODHD ohne verwertbare Zeilen");
+  if (out.length === 0) throw new Error(`EODHD lieferte keine verwertbaren Zeilen für ${sym}.`);
   return { ohlc: out.slice(-days), currency: currencyFromSuffix(sym), source: "EODHD" };
 }
 
-/** Intraday-Kerzen von EODHD (1m/5m/1h). */
+/** Intraday-Kerzen (1m/5m/1h). */
 async function eodhdIntraday(sym: string, interval: string, windowMs: number): Promise<Series> {
-  const key = process.env.EODHD_API_KEY;
-  if (!key) throw new Error("kein EODHD-Schlüssel");
+  const key = requireKey();
   const t = toEodhd(sym);
   if (!t) throw new Error(`EODHD führt ${sym} nicht.`);
   const iv = EOD_INTERVAL[interval];
-  if (!iv) throw new Error(`EODHD kennt Intervall ${interval} nicht.`);
+  if (!iv) {
+    throw new Error(
+      `Auflösung ${interval} gibt es bei EODHD nicht — möglich sind 1 Minute, 5 Minuten und 1 Stunde.`,
+    );
+  }
   const to = Math.floor(Date.now() / 1000);
   const from = to - Math.floor(windowMs / 1000);
   const url = `https://eodhd.com/api/intraday/${encodeURIComponent(t)}?api_token=${key}&fmt=json&interval=${iv}&from=${from}&to=${to}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`EODHD ${res.status}`);
+  if (!res.ok) throw new Error(`EODHD antwortete mit ${res.status}.`);
   const rows = (await res.json()) as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume?: number }>;
-  if (!Array.isArray(rows) || rows.length === 0) throw new Error("EODHD ohne Intraday-Daten");
+  if (!Array.isArray(rows) || rows.length === 0) throw new Error(`EODHD hat keine Intraday-Daten für ${sym}.`);
   const out: OHLC[] = [];
   for (const r of rows) {
     if (!Number.isFinite(r.close) || r.close <= 0 || !Number.isFinite(r.timestamp)) continue;
     out.push({ t: Math.floor(r.timestamp), o: r.open, h: r.high, l: r.low, c: r.close, v: r.volume });
   }
-  if (out.length === 0) throw new Error("EODHD ohne verwertbare Intraday-Zeilen");
+  if (out.length === 0) throw new Error(`EODHD lieferte keine verwertbaren Intraday-Zeilen für ${sym}.`);
   out.sort((a, b) => a.t - b.t);
   return { ohlc: out, currency: currencyFromSuffix(sym), source: "EODHD" };
 }
 
-/* ---------- Databento (institutionelle Tick-/Sekundendaten, US) ---------- */
-
-/** Unsere Intervalle → Databento-Schemas. Databento kennt 1s/1m/1h/1d. */
-const DB_SCHEMA: Record<string, string> = {
-  "1s": "ohlcv-1s", "1m": "ohlcv-1m", "60m": "ohlcv-1h", "1h": "ohlcv-1h",
-};
-
-/** Databento führt US-Titel als Rohsymbol; alles andere kann es hier nicht. */
-function toDatabento(sym: string): string | null {
-  const u = sym.toUpperCase();
-  if (u.startsWith("^") || u.endsWith("=X") || u.endsWith("=F")) return null;
-  if (/-(USD|EUR|USDT)$/.test(u)) return null;
-  if (u.includes(".")) return null;
-  return u;
-}
-
-/**
- * Kerzen von Databentos Historical-API (`timeseries.get_range`, NDJSON).
- * Preise kommen als Festkomma-Ganzzahlen (1e-9), Zeitstempel in Nanosekunden.
- * Achtung: Databento rechnet nach Datenmenge ab — die Fenster sind deshalb
- * bewusst knapp gewählt.
- */
-async function databentoSeries(
-  sym: string, schema: string, startMs: number, endMs: number, limit: number,
-): Promise<Series> {
-  const key = process.env.DATABENTO_API_KEY;
-  if (!key) throw new Error("kein Databento-Schlüssel");
-  const t = toDatabento(sym);
-  if (!t) throw new Error(`Databento führt ${sym} nicht (nur US-Titel).`);
-  const dataset = process.env.DATABENTO_DATASET || "DBEQ.BASIC";
-  const params = new URLSearchParams({
-    dataset, symbols: t, schema, stype_in: "raw_symbol", encoding: "json",
-    start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString(),
-    limit: String(limit),
-  });
-  const res = await fetch(`https://hist.databento.com/v0/timeseries.get_range?${params}`, {
-    headers: { Authorization: `Basic ${Buffer.from(`${key}:`).toString("base64")}` },
-  });
-  if (!res.ok) throw new Error(`Databento ${res.status}`);
-
-  const SCALE = 1e-9;
-  const out: OHLC[] = [];
-  for (const line of (await res.text()).split("\n")) {
-    const s = line.trim();
-    if (!s) continue;
-    let r: Record<string, unknown>;
-    try { r = JSON.parse(s) as Record<string, unknown>; } catch { continue; }
-    const hd = r.hd as { ts_event?: string | number } | undefined;
-    const ts = Number(hd?.ts_event ?? r.ts_event);
-    const o = Number(r.open), h = Number(r.high), l = Number(r.low), c = Number(r.close);
-    if (!Number.isFinite(ts) || !Number.isFinite(c) || c <= 0) continue;
-    out.push({
-      t: Math.floor(ts / 1e9), o: o * SCALE, h: h * SCALE, l: l * SCALE, c: c * SCALE,
-      v: Number.isFinite(Number(r.volume)) ? Number(r.volume) : undefined,
-    });
-  }
-  if (out.length === 0) throw new Error("Databento ohne Daten im Zeitfenster");
-  out.sort((a, b) => a.t - b.t);
-  return { ohlc: out, currency: "USD", source: "Databento" };
-}
-
-/* ---------- Polygon.io (einzige Quelle mit echten Sekundenkerzen) ---------- */
-
-/** US-Indizes, die Polygon unter `I:` führt. */
-const PG_INDEX: Record<string, string> = {
-  "^GSPC": "I:SPX", "^DJI": "I:DJI", "^IXIC": "I:COMP", "^NDX": "I:NDX",
-  "^VIX": "I:VIX", "^RUT": "I:RUT",
-};
-
-/** Yahoo-Symbol → Polygon-Ticker. null, wenn Polygon den Titel nicht führt. */
-function toPolygon(sym: string): string | null {
-  const u = sym.toUpperCase();
-  const cx = u.match(/^([A-Z0-9]{2,6})-(USD|EUR|USDT)$/);
-  if (cx) return `X:${cx[1]}${cx[2] === "USDT" ? "USD" : cx[2]}`;
-  const fx = u.match(/^([A-Z]{3})([A-Z]{3})=X$/);
-  if (fx) return `C:${fx[1]}${fx[2]}`;
-  if (u.startsWith("^")) return PG_INDEX[u] ?? null;         // nur US-Indizes
-  if (u.endsWith("=F")) return null;                         // Futures: eigenes Produkt
-  if (u.includes(".")) return null;                          // Nicht-US-Börsen führt Polygon nicht
-  return u;                                                  // US-Aktien/ETFs/ADRs
-}
-
-/** Polygon-Intervall aus unserem Kürzel. */
-const PG_INTERVAL: Record<string, { mult: number; span: string }> = {
-  "1s": { mult: 1, span: "second" },
-  "1m": { mult: 1, span: "minute" },
-  "5m": { mult: 5, span: "minute" },
-  "15m": { mult: 15, span: "minute" },
-  "30m": { mult: 30, span: "minute" },
-  "60m": { mult: 1, span: "hour" },
-  "1h": { mult: 1, span: "hour" },
-};
-
-/**
- * Aggregierte Kerzen von Polygon. Holt absteigend (neueste zuerst) mit Limit
- * und dreht um — so bekommt man verlässlich die jüngsten N Balken, ohne das
- * Zeitfenster exakt treffen zu müssen.
- */
-async function polygonSeries(
-  sym: string, mult: number, span: string, windowMs: number, limit: number,
-): Promise<Series> {
-  const key = process.env.POLYGON_API_KEY;
-  if (!key) throw new Error("kein Polygon-Schlüssel");
-  const t = toPolygon(sym);
-  if (!t) throw new Error(`Polygon führt ${sym} nicht.`);
-  const to = Date.now();
-  const from = to - windowMs;
-  const url =
-    `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(t)}/range/${mult}/${span}/${from}/${to}` +
-    `?adjusted=true&sort=desc&limit=${limit}&apiKey=${key}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Polygon ${res.status}`);
-  const json = (await res.json()) as {
-    status?: string; error?: string;
-    results?: Array<{ t: number; o: number; h: number; l: number; c: number; v?: number }>;
-  };
-  if (json.error) throw new Error(json.error);
-  const rows = json.results;
-  if (!rows?.length) throw new Error("Polygon ohne Daten");
-  const out: OHLC[] = rows
-    .filter((r) => Number.isFinite(r.c) && r.c > 0)
-    .map((r) => ({ t: Math.floor(r.t / 1000), o: r.o, h: r.h, l: r.l, c: r.c, v: r.v }))
-    .reverse();                                              // desc → asc
-  if (out.length === 0) throw new Error("Polygon ohne verwertbare Zeilen");
-  const cur = t.startsWith("C:") ? t.slice(4) : t.startsWith("X:") ? t.slice(-3) : "USD";
-  return { ohlc: out, currency: cur, source: "Polygon" };
-}
-
 /* ---------- Öffentliche API ---------- */
 
-/**
- * Vollständige Kursreihe (mit Währung) eines Titels. Reihenfolge: Twelve Data
- * (falls Schlüssel gesetzt — datacenter-tauglich), dann Yahoo, dann Stooq.
- */
+/** Vollständige Tages-Kursreihe (mit Währung und Quelle). */
 export async function candlesSeries(symbol: string, days = 750): Promise<Series> {
-  const sym = normTicker(symbol);
-  if (process.env.EODHD_API_KEY && toEodhd(sym)) {
-    try { return await eodhdDaily(sym, days); } catch { /* Fallback unten */ }
-  }
-  if (process.env.DATABENTO_API_KEY && toDatabento(sym)) {
-    const end = Date.now();
-    try {
-      return await databentoSeries(sym, "ohlcv-1d", end - days * 1.7 * 86400_000, end, Math.min(days, 5000));
-    } catch { /* Fallback unten */ }
-  }
-  if (process.env.POLYGON_API_KEY && toPolygon(sym)) {
-    try { return await polygonSeries(sym, 1, "day", days * 1.7 * 86400_000, Math.min(days, 5000)); } catch { /* Fallback unten */ }
-  }
-  if (process.env.TWELVEDATA_API_KEY) {
-    try { return await twelveSeries(sym, "1day", days); } catch { /* Fallback unten */ }
-  }
-  try {
-    return await yahooCandles(sym, days);
-  } catch {
-    return await stooqCandles(sym, days);
-  }
+  return eodhdDaily(normTicker(symbol), days);
 }
 
 /** Nur die OHLC-Kerzen — für die Rechenkerne, die keine Währung brauchen. */
@@ -459,60 +167,15 @@ export async function candles(symbol: string, days = 750): Promise<OHLC[]> {
   return (await candlesSeries(symbol, days)).ohlc;
 }
 
-/** Erlaubte Intraday-Auflösungen. `1s` kann nur Polygon. */
-const INTRADAY_INTERVALS = new Set(["1s", "1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h"]);
 const INTRADAY_RANGES = new Set(["1d", "5d", "1mo"]);
-/** Zeitfenster je Range in Millisekunden (großzügig — Polygon schneidet per Limit). */
-const RANGE_MS: Record<string, number> = { "1d": 4 * 86400_000, "5d": 10 * 86400_000, "1mo": 45 * 86400_000 };
 
-/**
- * Intraday-Kerzen (Minuten/Stunden) samt Währung. Nur über Yahoo — Stooq führt
- * keine Intraday-Daten. Auf Rechenzentrums-IPs (Vercel) kann Yahoo blocken;
- * lokal funktioniert es. Wirft bei Ausfall, damit die UI reagieren kann.
- */
+/** Intraday-Kerzen (1m/5m/1h) samt Währung und Quelle. */
 export async function intradaySeries(
   symbol: string, range = "1d", interval = "5m",
 ): Promise<Series> {
   const sym = normTicker(symbol);
   const r = INTRADAY_RANGES.has(range) ? range : "1d";
-  const iv = INTRADAY_INTERVALS.has(interval) ? interval : "5m";
-
-  // EODHD zuerst (breiteste Abdeckung), dann Databento (tick-genau), dann Polygon.
-  if (process.env.EODHD_API_KEY && EOD_INTERVAL[iv] && toEodhd(sym)) {
-    try { return await eodhdIntraday(sym, iv, RANGE_MS[r] ?? 4 * 86400_000); } catch { /* Fallback unten */ }
-  }
-
-  const dbSchema = DB_SCHEMA[iv];
-  if (process.env.DATABENTO_API_KEY && dbSchema && toDatabento(sym)) {
-    const end = Date.now();
-    const limit = iv === "1s" ? 20000 : 5000;
-    // Fenster an die gewünschte Balkenzahl anpassen — Databento rechnet nach Menge ab.
-    const secPerBar = iv === "1s" ? 1 : iv === "1m" ? 60 : 3600;
-    const span = Math.max(limit * secPerBar * 1.6 * 1000, 6 * 3600_000);
-    try { return await databentoSeries(sym, dbSchema, end - span, end, limit); } catch { /* Fallback unten */ }
-  }
-
-  const pg = PG_INTERVAL[iv];
-  if (process.env.POLYGON_API_KEY && pg && toPolygon(sym)) {
-    const win = iv === "1s" ? 2 * 86400_000 : (RANGE_MS[r] ?? 4 * 86400_000);
-    const lim = iv === "1s" ? 20000 : 5000;
-    try { return await polygonSeries(sym, pg.mult, pg.span, win, lim); } catch (e) {
-      if (iv === "1s") throw e;                    // ohne Polygon keine Sekunden
-    }
-  }
-  if (iv === "1s") {
-    throw new Error(
-      "Sekundenkerzen brauchen Databento (DATABENTO_API_KEY) oder Polygon (POLYGON_API_KEY) — " +
-      "jeweils mit Intraday-Zugang. Beide führen US-Titel (Polygon zusätzlich Krypto/Forex); " +
-      "für XETRA & Co. bleibt 1 Minute die feinste Stufe — oder du wählst oben den US-Handelsplatz.",
-    );
-  }
-
-  if (process.env.TWELVEDATA_API_KEY) {
-    const outsize = r === "1d" ? 500 : r === "5d" ? 700 : 1500;
-    try { return await twelveSeries(sym, TD_INTERVAL[iv] ?? "5min", outsize); } catch { /* Fallback unten */ }
-  }
-  return yahooChart(sym, r, iv);
+  return eodhdIntraday(sym, interval, RANGE_MS[r] ?? 4 * 86400_000);
 }
 
 /** Schlusskurse eines Titels, älteste zuerst. */

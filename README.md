@@ -71,7 +71,7 @@ lib/quant/
 
 Das Rechenlabor unter `/labor` macht jeden Kern einzeln bedienbar. **Derivate**
 und **Bewertung** rechnen im Browser und funktionieren ohne Netz; die übrigen
-Kerne ziehen Live-Daten (Yahoo Finance / SEC EDGAR) serverseitig.
+Kerne ziehen Live-Daten (EODHD / SEC EDGAR) serverseitig.
 
 ![Derivate](docs/screenshots/derivate.png)
 
@@ -114,7 +114,7 @@ Zusatzkonfiguration:
    automatisch.
 
 Ohne Variablen funktioniert alles außer Marktbrief; die Kurscharts, Stat-Arb
-und Filings ziehen live von Yahoo/SEC, sobald die Umgebung Netz nach außen
+und Filings ziehen live von EODHD/SEC, sobald die Umgebung Netz nach außen
 erlaubt (lokal und auf Vercel gegeben).
 
 ## Tests

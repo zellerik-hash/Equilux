@@ -8,7 +8,7 @@ export const runtime = "nodejs";
  * OHLC-Kerzen. Zwei Modi:
  *   • Tageskurse:  ?symbol=SAP.DE&days=180
  *   • Intraday:    ?symbol=SAP.DE&range=1d&interval=5m
- * Intraday zieht nur von Yahoo (kein Stooq); Tageskurse mit Stooq-Fallback.
+ * Quelle ist EODHD (Tages- und Intraday-Kurse).
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);

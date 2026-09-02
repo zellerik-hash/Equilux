@@ -110,9 +110,9 @@ const CATALOG_BY_SYMBOL: Record<string, CatalogEntry> = Object.fromEntries(
 export interface Listing { venue: string; symbol: string; }
 
 /**
- * Dieselbe Firma an verschiedenen Handelsplätzen. Wichtig, weil Polygon nur
- * US-Notierungen führt: über die US-Zeile (ADR) bekommt man auch für
- * europäische Konzerne Intraday- und Sekundendaten.
+ * Dieselbe Firma an verschiedenen Handelsplätzen — praktisch, um denselben
+ * Titel wahlweise an der Heimatbörse oder als US-Notierung (ADR) zu sehen,
+ * etwa wenn die Daten dort vollständiger sind.
  */
 const VENUE_GROUPS: Listing[][] = [
   [{ venue: "Xetra", symbol: "SAP.DE" }, { venue: "NYSE (ADR)", symbol: "SAP" }],

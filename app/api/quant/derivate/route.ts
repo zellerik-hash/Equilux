@@ -14,7 +14,7 @@ interface Body {
 
 /**
  * Derivate-Auswertung. Reine Rechnung ohne Datenabruf — der Kurs kommt aus
- * dem Dossier oder von Hand, damit die Route auch ohne Yahoo antwortet.
+ * dem Dossier oder von Hand, damit die Route auch ohne Kursquelle antwortet.
  */
 export async function POST(req: Request) {
   try {

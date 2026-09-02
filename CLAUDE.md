@@ -21,7 +21,7 @@ Grundlagenerklärungen**. Schreib die Rechnung und benenne, wo sie bricht.
   Derivate, Bewertung, Stat-Arb, SOTP, Filings, Marktbrief.
 - **Derivate** und **Bewertung** rechnen client-seitig (offline nutzbar).
 - **Stat-Arb/Scan/Filings/Marktbrief** brauchen Live-Daten
-  (Yahoo/SEC/Anthropic), serverseitig über `/api/quant/*`.
+  (EODHD/SEC/Anthropic), serverseitig über `/api/quant/*`.
 - `npm run build` läuft grün, `npm test` = 43 Referenztests grün.
 
 ## Stack und Konventionen
@@ -73,7 +73,7 @@ tests/reference.test.ts                 43 Referenztests (npm test)
 
 ## Umgebung / Netz
 
-Yahoo Finance und SEC EDGAR können in gesperrten Umgebungen blockiert sein
+EODHD und SEC EDGAR können in gesperrten Umgebungen blockiert sein
 (kein Live-Abruf). Der Code ist trotzdem korrekt; Derivate/Bewertung/SOTP
 funktionieren immer, weil sie client-seitig rechnen. Kein API-Schlüssel darf je
 im Client landen.

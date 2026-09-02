@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 /**
  * Technik + Risiko eines Titels. `?symbol=SAP.DE&days=750`.
- * Zieht OHLC-Kerzen von Yahoo (serverseitig) und rechnet beide Kerne.
+ * Zieht OHLC-Kerzen von EODHD (serverseitig) und rechnet beide Kerne.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
