@@ -8,6 +8,7 @@ import ThemeToggle from "../ThemeToggle";
 import ModeToggle from "../ModeToggle";
 import { useMode } from "../mode";
 import SessionClock from "./SessionClock";
+import BackupMenu from "./BackupMenu";
 import WatchlistRail from "./WatchlistRail";
 import ChartView from "./ChartView";
 import Werkzeuge from "./Werkzeuge";
@@ -65,6 +66,7 @@ export default function Labor() {
         <div className={s.topRight}>
           <SessionClock />
           <ModeToggle />
+          <BackupMenu />
           <ThemeToggle />
         </div>
       </header>

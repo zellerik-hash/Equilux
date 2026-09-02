@@ -1,0 +1,20 @@
+/* EQUILUX — Backup-Menü. Theme-aware. */
+.wrap { position: relative; }
+.trigger {
+  background: transparent; border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+  color: var(--text-dim); font-size: 14px; line-height: 1; padding: 6px 9px;
+  transition: color 0.15s var(--ease-out), border-color 0.15s var(--ease-out);
+}
+.trigger:hover { color: var(--text); border-color: var(--accent); }
+.backdrop { position: fixed; inset: 0; z-index: 50; }
+.menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 51; width: 260px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22); padding: 6px;
+}
+.item {
+  display: block; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 7px;
+  padding: 9px 10px; cursor: pointer; color: var(--text); font: 500 12.5px/1.2 var(--font-sans-stack);
+}
+.item:hover { background: var(--surface-2); }
+.hint { margin: 6px 8px 4px; color: var(--text-faint); font-size: 11px; line-height: 1.45; }
