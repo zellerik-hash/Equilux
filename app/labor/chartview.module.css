@@ -10,7 +10,14 @@
 .readoutPrice { font: 600 13px/1 var(--font-mono-stack); color: var(--text); }
 .readoutDay { font: 400 10px/1 var(--font-mono-stack); color: var(--text-faint); }
 
-.maLegend { position: absolute; top: 8px; left: 10px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+.maLegend {
+  position: absolute; top: 8px; left: 8px; z-index: 2; pointer-events: none;
+  display: inline-flex; flex-direction: column; gap: 3px;
+  padding: 5px 9px; border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(3px);
+}
 .ohlc { display: flex; flex-wrap: wrap; gap: 11px; }
 .ohlcItem { font: 400 10.5px/1.2 var(--font-mono-stack); color: var(--text-faint); }
 .ohlcItem b { font-weight: 600; color: var(--text); margin-left: 2px; }
