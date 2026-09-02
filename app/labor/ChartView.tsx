@@ -21,6 +21,7 @@ const WATCH = "equilux-watch-v2";
 
 interface Tf { id: string; label: string; intraday?: boolean; range?: string; interval?: string; days?: number; points: number; stepSec: number; }
 const TFS: Tf[] = [
+  { id: "1s", label: "1Sek", intraday: true, range: "1d", interval: "1s", points: 900, stepSec: 1 },
   { id: "1min", label: "1Min", intraday: true, range: "1d", interval: "1m", points: 390, stepSec: 60 },
   { id: "1t", label: "1T", intraday: true, range: "1d", interval: "5m", points: 78, stepSec: 300 },
   { id: "5t", label: "5T", intraday: true, range: "5d", interval: "15m", points: 130, stepSec: 900 },
@@ -29,7 +30,7 @@ const TFS: Tf[] = [
   { id: "1j", label: "1J", days: 365, points: 365, stepSec: 86400 },
   { id: "5j", label: "5J", days: 1825, points: 520, stepSec: 86400 },
 ];
-const tfById = (id: string): Tf => TFS.find((t) => t.id === id) ?? TFS[4];
+const tfById = (id: string): Tf => TFS.find((t) => t.id === id) ?? TFS[5];
 const MA_OPTIONS = [20, 50, 200];
 const IND_OPTIONS = [
   { key: "boll", label: "BB" },

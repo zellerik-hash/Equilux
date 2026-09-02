@@ -212,6 +212,66 @@ async function twelveSeries(sym: string, interval: string, outputsize: number): 
 
 const TD_INTERVAL: Record<string, string> = { "1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "60m": "1h", "1h": "1h" };
 
+/* ---------- Polygon.io (einzige Quelle mit echten Sekundenkerzen) ---------- */
+
+/** Yahoo-Symbol → Polygon-Ticker. null, wenn Polygon den Titel nicht führt. */
+function toPolygon(sym: string): string | null {
+  const u = sym.toUpperCase();
+  const cx = u.match(/^([A-Z0-9]{2,6})-(USD|EUR|USDT)$/);
+  if (cx) return `X:${cx[1]}${cx[2] === "USDT" ? "USD" : cx[2]}`;
+  const fx = u.match(/^([A-Z]{3})([A-Z]{3})=X$/);
+  if (fx) return `C:${fx[1]}${fx[2]}`;
+  if (u.startsWith("^") || u.endsWith("=F")) return null;   // Indizes/Futures: eigene Tarife
+  if (u.includes(".")) return null;                          // Nicht-US-Börsen deckt Polygon nicht ab
+  return u;                                                  // US-Aktien/ETFs
+}
+
+/** Polygon-Intervall aus unserem Kürzel. */
+const PG_INTERVAL: Record<string, { mult: number; span: string }> = {
+  "1s": { mult: 1, span: "second" },
+  "1m": { mult: 1, span: "minute" },
+  "5m": { mult: 5, span: "minute" },
+  "15m": { mult: 15, span: "minute" },
+  "30m": { mult: 30, span: "minute" },
+  "60m": { mult: 1, span: "hour" },
+  "1h": { mult: 1, span: "hour" },
+};
+
+/**
+ * Aggregierte Kerzen von Polygon. Holt absteigend (neueste zuerst) mit Limit
+ * und dreht um — so bekommt man verlässlich die jüngsten N Balken, ohne das
+ * Zeitfenster exakt treffen zu müssen.
+ */
+async function polygonSeries(
+  sym: string, mult: number, span: string, windowMs: number, limit: number,
+): Promise<Series> {
+  const key = process.env.POLYGON_API_KEY;
+  if (!key) throw new Error("kein Polygon-Schlüssel");
+  const t = toPolygon(sym);
+  if (!t) throw new Error(`Polygon führt ${sym} nicht.`);
+  const to = Date.now();
+  const from = to - windowMs;
+  const url =
+    `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(t)}/range/${mult}/${span}/${from}/${to}` +
+    `?adjusted=true&sort=desc&limit=${limit}&apiKey=${key}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Polygon ${res.status}`);
+  const json = (await res.json()) as {
+    status?: string; error?: string;
+    results?: Array<{ t: number; o: number; h: number; l: number; c: number; v?: number }>;
+  };
+  if (json.error) throw new Error(json.error);
+  const rows = json.results;
+  if (!rows?.length) throw new Error("Polygon ohne Daten");
+  const out: OHLC[] = rows
+    .filter((r) => Number.isFinite(r.c) && r.c > 0)
+    .map((r) => ({ t: Math.floor(r.t / 1000), o: r.o, h: r.h, l: r.l, c: r.c, v: r.v }))
+    .reverse();                                              // desc → asc
+  if (out.length === 0) throw new Error("Polygon ohne verwertbare Zeilen");
+  const cur = t.startsWith("C:") ? t.slice(4) : t.startsWith("X:") ? t.slice(-3) : "USD";
+  return { ohlc: out, currency: cur };
+}
+
 /* ---------- Öffentliche API ---------- */
 
 /**
@@ -220,6 +280,9 @@ const TD_INTERVAL: Record<string, string> = { "1m": "1min", "5m": "5min", "15m":
  */
 export async function candlesSeries(symbol: string, days = 750): Promise<Series> {
   const sym = normTicker(symbol);
+  if (process.env.POLYGON_API_KEY && toPolygon(sym)) {
+    try { return await polygonSeries(sym, 1, "day", days * 1.7 * 86400_000, Math.min(days, 5000)); } catch { /* Fallback unten */ }
+  }
   if (process.env.TWELVEDATA_API_KEY) {
     try { return await twelveSeries(sym, "1day", days); } catch { /* Fallback unten */ }
   }
@@ -235,9 +298,11 @@ export async function candles(symbol: string, days = 750): Promise<OHLC[]> {
   return (await candlesSeries(symbol, days)).ohlc;
 }
 
-/** Erlaubte Intraday-Auflösungen (Yahoo). */
-const INTRADAY_INTERVALS = new Set(["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h"]);
+/** Erlaubte Intraday-Auflösungen. `1s` kann nur Polygon. */
+const INTRADAY_INTERVALS = new Set(["1s", "1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h"]);
 const INTRADAY_RANGES = new Set(["1d", "5d", "1mo"]);
+/** Zeitfenster je Range in Millisekunden (großzügig — Polygon schneidet per Limit). */
+const RANGE_MS: Record<string, number> = { "1d": 4 * 86400_000, "5d": 10 * 86400_000, "1mo": 45 * 86400_000 };
 
 /**
  * Intraday-Kerzen (Minuten/Stunden) samt Währung. Nur über Yahoo — Stooq führt
@@ -250,6 +315,23 @@ export async function intradaySeries(
   const sym = normTicker(symbol);
   const r = INTRADAY_RANGES.has(range) ? range : "1d";
   const iv = INTRADAY_INTERVALS.has(interval) ? interval : "5m";
+
+  // Polygon zuerst — und für Sekundenkerzen die einzige mögliche Quelle.
+  const pg = PG_INTERVAL[iv];
+  if (process.env.POLYGON_API_KEY && pg && toPolygon(sym)) {
+    const win = iv === "1s" ? 2 * 86400_000 : (RANGE_MS[r] ?? 4 * 86400_000);
+    const lim = iv === "1s" ? 20000 : 5000;
+    try { return await polygonSeries(sym, pg.mult, pg.span, win, lim); } catch (e) {
+      if (iv === "1s") throw e;                    // ohne Polygon keine Sekunden
+    }
+  }
+  if (iv === "1s") {
+    throw new Error(
+      "Sekundenkerzen brauchen Polygon.io: POLYGON_API_KEY setzen (und einen Tarif mit Intraday-Daten). " +
+      "Polygon deckt US-Aktien, Krypto und Forex ab — für XETRA & Co. bleibt 1 Minute die feinste Stufe.",
+    );
+  }
+
   if (process.env.TWELVEDATA_API_KEY) {
     const outsize = r === "1d" ? 500 : r === "5d" ? 700 : 1500;
     try { return await twelveSeries(sym, TD_INTERVAL[iv] ?? "5min", outsize); } catch { /* Fallback unten */ }
