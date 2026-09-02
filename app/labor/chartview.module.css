@@ -11,18 +11,18 @@
 .readoutDay { font: 400 10px/1 var(--font-mono-stack); color: var(--text-faint); }
 
 .maLegend {
-  position: absolute; top: 8px; left: 8px; z-index: 2; pointer-events: none;
-  display: inline-flex; flex-direction: column; gap: 3px;
-  padding: 5px 9px; border-radius: 8px;
+  position: absolute; top: 6px; left: 6px; z-index: 2; pointer-events: none;
+  display: inline-flex; flex-direction: column; gap: 2px;
+  padding: 3px 7px; border-radius: 7px;
   background: color-mix(in srgb, var(--surface) 82%, transparent);
   border: 1px solid var(--border);
   backdrop-filter: blur(3px);
 }
-.ohlc { display: flex; flex-wrap: wrap; gap: 11px; }
-.ohlcItem { font: 400 10.5px/1.2 var(--font-mono-stack); color: var(--text-faint); }
+.ohlc { display: flex; flex-wrap: wrap; gap: 8px; }
+.ohlcItem { font: 400 9px/1.15 var(--font-mono-stack); color: var(--text-faint); }
 .ohlcItem b { font-weight: 600; color: var(--text); margin-left: 2px; }
-.maTags { display: flex; gap: 10px; }
-.maTag { font: 600 10px/1 var(--font-mono-stack); letter-spacing: .04em; }
+.maTags { display: flex; gap: 8px; }
+.maTag { font: 600 9px/1 var(--font-mono-stack); letter-spacing: .03em; }
 
 .chartView { display: flex; flex-direction: column; gap: 14px; }
 .cvBar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
