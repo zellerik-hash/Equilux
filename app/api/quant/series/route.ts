@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   const days = Number.isFinite(daysRaw) ? Math.max(20, Math.min(2000, daysRaw)) : 180;
 
   try {
-    const { ohlc, currency } = interval
+    const { ohlc, currency, source } = interval
       ? await intradaySeries(symbol, range ?? "1d", interval)
       : await candlesSeries(symbol, days);
     if (ohlc.length < 2) {
@@ -34,6 +34,7 @@ export async function GET(req: Request) {
       data: {
         symbol,
         currency,
+        source,
         intraday: !!interval,
         t: ohlc.map((c) => c.t),
         closes: ohlc.map((c) => c.c),

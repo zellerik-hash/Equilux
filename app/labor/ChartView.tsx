@@ -42,7 +42,7 @@ const LAYOUTS = [1, 2, 4] as const;
 type Layout = (typeof LAYOUTS)[number];
 type Mode = "line" | "candles";
 
-interface Cell { loading?: boolean; closes?: number[]; ohlc?: Ohlc[]; t?: number[]; volumes?: number[]; currency?: string; intraday?: boolean; error?: string; demo?: boolean; }
+interface Cell { loading?: boolean; closes?: number[]; ohlc?: Ohlc[]; t?: number[]; volumes?: number[]; currency?: string; source?: string; intraday?: boolean; error?: string; demo?: boolean; }
 
 function demoCloses(sym: string, n: number): number[] {
   let seed = 0;
@@ -178,7 +178,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
         .then((j) => setCache((c) => ({
           ...c,
           [k]: j.ok
-            ? { closes: j.data.closes, ohlc: j.data.ohlc, t: j.data.t, volumes: j.data.volumes, currency: j.data.currency, intraday: j.data.intraday }
+            ? { closes: j.data.closes, ohlc: j.data.ohlc, t: j.data.t, volumes: j.data.volumes, currency: j.data.currency, source: j.data.source, intraday: j.data.intraday }
             : { error: j.error || "Abruf fehlgeschlagen" },
         })))
         .catch(() => setCache((c) => ({ ...c, [k]: { error: "Keine Verbindung" } })))
@@ -275,7 +275,16 @@ export default function ChartView({ focus }: { focus: string | null }) {
                 <div className={s.slotChart}><BigChart data={series} candles={cell?.ohlc} times={cell?.t} volumes={cell?.volumes} mas={mas} maType={maType} showVolume={showVol} indicators={inds} currency={cur} intraday={cell?.intraday} mode={mode} /></div>
                 <div className={s.slotFoot}>
                   <span>{de(Math.min(...series))} – {de(Math.max(...series))}</span>
-                  <span>{cell?.demo ? <span className={s.demoTag}>Demo-Daten</span> : `${series.length} ${def.intraday ? "Kerzen · intraday" : "Tage"}`}</span>
+                  <span>
+                    {cell?.demo ? (
+                      <span className={s.demoTag} title="Keine Live-Daten — es fehlt ein Datenanbieter-Schlüssel oder die Quelle ist blockiert.">Demo-Daten</span>
+                    ) : (
+                      <>
+                        {series.length} {def.intraday ? "Kerzen" : "Tage"}
+                        {cell?.source && <span className={s.srcTag} title="Datenquelle dieser Kursreihe"> · {cell.source}</span>}
+                      </>
+                    )}
+                  </span>
                 </div>
               </>
             ) : cell?.loading ? (
