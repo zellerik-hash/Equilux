@@ -3,24 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import s from "./labor.module.css";
 import Logo from "./Logo";
-import { metaFor } from "./symbols";
+import SymbolSearch from "./SymbolSearch";
+import { metaFor, marketOf, MARKETS, type Market } from "./symbols";
 
 /**
- * Watchlist als feste Seitenspalte. Nach Kategorien gruppiert (Aktien,
- * Commodities, Indizes, Crypto — erweiterbar); eine Kategorie erscheint nur,
- * wenn sie Einträge hat. Klick auf einen Titel fokussiert ihn (→ Chart).
+ * Watchlist als einklappbare Seitenspalte. Nach Märkten gruppiert (Aktien,
+ * Indizes, Krypto, Rohstoffe, Forex, Futures); eine Gruppe erscheint nur, wenn
+ * sie Einträge hat. Neue Titel kommen über die Symbol-Suche (Markt-Chips) oder
+ * per Schnell-Eingabe. Klick auf einen Titel fokussiert ihn (→ Chart).
  */
 const STORE = "equilux-watch-v2";
 
-type CatKey = "aktien" | "commodities" | "indizes" | "crypto";
-const CATEGORIES: { key: CatKey; label: string; color: string }[] = [
-  { key: "aktien", label: "Aktien", color: "var(--accent)" },
-  { key: "commodities", label: "Commodities", color: "var(--gold)" },
-  { key: "indizes", label: "Indizes", color: "var(--accent-2)" },
-  { key: "crypto", label: "Crypto", color: "var(--up)" },
-];
-
-interface Item { symbol: string; cat: CatKey; }
+interface Item { symbol: string; cat: Market; }
 const DEFAULT: Item[] = [
   { symbol: "SAP.DE", cat: "aktien" },
   { symbol: "ASML.AS", cat: "aktien" },
@@ -28,12 +22,11 @@ const DEFAULT: Item[] = [
   { symbol: "AAPL", cat: "aktien" },
 ];
 
-function detectCat(sym: string): CatKey {
-  const u = sym.toUpperCase();
-  if (u.startsWith("^")) return "indizes";
-  if (u.endsWith("=F")) return "commodities";
-  if (/-(USD|EUR|USDT)$/.test(u)) return "crypto";
-  return "aktien";
+/** Alte Kategorienamen auf die neuen Markt-Schlüssel abbilden. */
+function normCat(raw: unknown, sym: string): Market {
+  const map: Record<string, Market> = { commodities: "rohstoffe", crypto: "krypto" };
+  const v = typeof raw === "string" ? (map[raw] ?? raw) : "";
+  return MARKETS.some((m) => m.key === v) ? (v as Market) : marketOf(sym);
 }
 
 export default function WatchlistRail({
@@ -47,8 +40,7 @@ export default function WatchlistRail({
 }) {
   const [items, setItems] = useState<Item[]>(DEFAULT);
   const [draft, setDraft] = useState("");
-  const [cat, setCat] = useState<CatKey>("aktien");
-  const [touched, setTouched] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -58,7 +50,7 @@ export default function WatchlistRail({
         if (Array.isArray(arr)) {
           setItems(arr.filter((x) => x && typeof x.symbol === "string").map((x) => ({
             symbol: String(x.symbol).toUpperCase(),
-            cat: (CATEGORIES.some((c) => c.key === x.cat) ? x.cat : "aktien") as CatKey,
+            cat: normCat(x.cat, String(x.symbol)),
           })));
         }
       }
@@ -70,18 +62,17 @@ export default function WatchlistRail({
     try { localStorage.setItem(STORE, JSON.stringify(next)); } catch { /* egal */ }
   };
 
-  const onDraft = (v: string) => { setDraft(v); if (!touched) setCat(detectCat(v)); };
-  const add = () => {
-    const sym = draft.trim().toUpperCase();
-    if (!sym || items.some((i) => i.symbol === sym)) { setDraft(""); return; }
-    save([...items, { symbol: sym, cat }]);
-    setDraft(""); setTouched(false);
+  const addSymbol = (rawSym: string) => {
+    const sym = rawSym.trim().toUpperCase();
+    if (!sym) return;
+    if (!items.some((i) => i.symbol === sym)) save([...items, { symbol: sym, cat: marketOf(sym) }]);
     onFocus(sym);
   };
+  const addFromDraft = () => { addSymbol(draft); setDraft(""); };
   const remove = (sym: string) => save(items.filter((i) => i.symbol !== sym));
 
   const grouped = useMemo(
-    () => CATEGORIES.map((c) => ({ ...c, entries: items.filter((i) => i.cat === c.key) })).filter((g) => g.entries.length > 0),
+    () => MARKETS.map((c) => ({ ...c, entries: items.filter((i) => i.cat === c.key) })).filter((g) => g.entries.length > 0),
     [items],
   );
 
@@ -93,25 +84,25 @@ export default function WatchlistRail({
           <button className={s.railCollapse} onClick={onCollapse} title="Watchlist einklappen" aria-label="Watchlist einklappen">❯</button>
         )}
       </div>
+
       <div className={s.railAdd}>
-        <input
-          className={s.railInput}
-          value={draft}
-          placeholder="Kürzel, z. B. SIE.DE"
-          onChange={(e) => onDraft(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
-          aria-label="Titel hinzufügen"
-        />
+        <button className={s.railSearchBtn} onClick={() => setSearchOpen(true)}>
+          <span className={s.railSearchIcon}>⌕</span> Märkte durchsuchen
+        </button>
         <div className={s.railAddRow}>
-          <select className={s.railSelect} value={cat} onChange={(e) => { setCat(e.target.value as CatKey); setTouched(true); }} aria-label="Kategorie">
-            {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-          </select>
-          <button className={s.railAddBtn} onClick={add} style={{ flex: 1 }}>Hinzufügen</button>
+          <input
+            className={s.railInput}
+            value={draft}
+            placeholder="Schnell: Kürzel + Enter"
+            onChange={(e) => setDraft(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === "Enter" && addFromDraft()}
+            aria-label="Titel schnell hinzufügen"
+          />
         </div>
       </div>
 
       {grouped.length === 0 ? (
-        <p className={s.railEmpty}>Noch leer — Kürzel eingeben, Kategorie wählen, hinzufügen.</p>
+        <p className={s.railEmpty}>Noch leer — „Märkte durchsuchen" öffnen und einen Titel wählen.</p>
       ) : (
         grouped.map((g) => (
           <div key={g.key} className={s.railCat}>
@@ -147,6 +138,8 @@ export default function WatchlistRail({
           </div>
         ))
       )}
+
+      <SymbolSearch open={searchOpen} onClose={() => setSearchOpen(false)} onPick={addSymbol} />
     </aside>
   );
 }

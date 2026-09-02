@@ -126,8 +126,18 @@
 .railReopen:hover { color: var(--text); border-color: var(--accent); }
 .railReopenIcon { font-size: 13px; line-height: 1; }
 .railReopenText { writing-mode: vertical-rl; font: 500 10px/1 var(--mono); letter-spacing: 0.18em; text-transform: uppercase; }
-.railAdd { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
+.railAdd { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .railAddRow { display: flex; gap: 7px; }
+.railSearchBtn {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+  border: 0; border-radius: 9px; padding: 10px 12px; cursor: pointer; color: #fff;
+  font: 600 12.5px/1 var(--font-sans-stack);
+  background: linear-gradient(105deg, var(--accent), var(--accent-2));
+  transition: transform 0.14s var(--ease-out), opacity 0.14s var(--ease-out);
+}
+.railSearchBtn:hover { transform: translateY(-1px); }
+.railSearchBtn:active { transform: scale(0.99); }
+.railSearchIcon { font-size: 15px; line-height: 0; }
 .railInput { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: var(--text); font: 400 12.5px/1.2 var(--mono); text-transform: uppercase; }
 .railInput:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .railSelect { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px; color: var(--text); font: 500 11px/1 var(--mono); cursor: pointer; }
