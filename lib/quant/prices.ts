@@ -156,11 +156,73 @@ async function stooqCandles(sym: string, days: number): Promise<Series> {
   return { ohlc: out.slice(-days), currency: currencyFromSuffix(sym) };
 }
 
+/* ---------- Datenanbieter (Twelve Data, optional per Schlüssel) ---------- */
+
+/** Yahoo-Symbol → Twelve-Data-Abfrage. null, wenn nicht sinnvoll abbildbar. */
+const TD_EXCHANGE: Record<string, string> = {
+  ".DE": "XETRA", ".L": "LSE", ".AS": "Euronext", ".PA": "Euronext",
+  ".MI": "MTA", ".MC": "BME", ".SW": "SIX", ".BR": "Euronext", ".LS": "Euronext",
+  ".HE": "OMX", ".ST": "OMX", ".CO": "OMX", ".OL": "OSE", ".VI": "VSE", ".IR": "ISE",
+};
+function toTwelve(sym: string): { symbol: string; exchange?: string } | null {
+  const u = sym.toUpperCase();
+  if (u.startsWith("^") || u.endsWith("=F")) return null;          // Indizes/Futures → Yahoo
+  const cx = u.match(/^([A-Z]{3})-(USD|EUR|USDT)$/);
+  if (cx) return { symbol: `${cx[1]}/${cx[2] === "USDT" ? "USD" : cx[2]}` };
+  const fx = u.match(/^([A-Z]{3})([A-Z]{3})=X$/);
+  if (fx) return { symbol: `${fx[1]}/${fx[2]}` };
+  const dot = u.lastIndexOf(".");
+  if (dot >= 0) {
+    const ex = TD_EXCHANGE[u.slice(dot)];
+    return ex ? { symbol: u.slice(0, dot), exchange: ex } : null;
+  }
+  return { symbol: u };                                            // US-Titel
+}
+
+/** Kursreihe von Twelve Data (nur wenn TWELVEDATA_API_KEY gesetzt ist). */
+async function twelveSeries(sym: string, interval: string, outputsize: number): Promise<Series> {
+  const key = process.env.TWELVEDATA_API_KEY;
+  if (!key) throw new Error("kein Twelve-Data-Schlüssel");
+  const q = toTwelve(sym);
+  if (!q) throw new Error(`Twelve führt ${sym} nicht sinnvoll.`);
+  const url =
+    `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(q.symbol)}` +
+    (q.exchange ? `&exchange=${encodeURIComponent(q.exchange)}` : "") +
+    `&interval=${interval}&outputsize=${Math.min(outputsize, 5000)}&format=JSON&apikey=${key}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Twelve ${res.status}`);
+  const json = (await res.json()) as {
+    status?: string; message?: string;
+    meta?: { currency?: string };
+    values?: Array<{ datetime: string; open: string; high: string; low: string; close: string; volume?: string }>;
+  };
+  if (json.status === "error" || !json.values?.length) throw new Error(json.message || "Twelve leer");
+  // Twelve liefert neueste zuerst → umdrehen.
+  const rows = [...json.values].reverse();
+  const out: OHLC[] = [];
+  for (const r of rows) {
+    const o = +r.open, h = +r.high, l = +r.low, c = +r.close;
+    if (Number.isFinite(o) && Number.isFinite(h) && Number.isFinite(l) && Number.isFinite(c) && c > 0) {
+      out.push({ t: Math.floor(new Date(r.datetime.replace(" ", "T") + "Z").getTime() / 1000), o, h, l, c, v: r.volume ? +r.volume : undefined });
+    }
+  }
+  if (out.length === 0) throw new Error("Twelve ohne verwertbare Zeilen");
+  return { ohlc: out, currency: json.meta?.currency || currencyFromSuffix(sym) };
+}
+
+const TD_INTERVAL: Record<string, string> = { "1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "60m": "1h", "1h": "1h" };
+
 /* ---------- Öffentliche API ---------- */
 
-/** Vollständige Kursreihe (mit Währung) eines Titels. Yahoo, dann Stooq. */
+/**
+ * Vollständige Kursreihe (mit Währung) eines Titels. Reihenfolge: Twelve Data
+ * (falls Schlüssel gesetzt — datacenter-tauglich), dann Yahoo, dann Stooq.
+ */
 export async function candlesSeries(symbol: string, days = 750): Promise<Series> {
   const sym = normTicker(symbol);
+  if (process.env.TWELVEDATA_API_KEY) {
+    try { return await twelveSeries(sym, "1day", days); } catch { /* Fallback unten */ }
+  }
   try {
     return await yahooCandles(sym, days);
   } catch {
@@ -188,6 +250,10 @@ export async function intradaySeries(
   const sym = normTicker(symbol);
   const r = INTRADAY_RANGES.has(range) ? range : "1d";
   const iv = INTRADAY_INTERVALS.has(interval) ? interval : "5m";
+  if (process.env.TWELVEDATA_API_KEY) {
+    const outsize = r === "1d" ? 500 : r === "5d" ? 700 : 1500;
+    try { return await twelveSeries(sym, TD_INTERVAL[iv] ?? "5min", outsize); } catch { /* Fallback unten */ }
+  }
   return yahooChart(sym, r, iv);
 }
 
