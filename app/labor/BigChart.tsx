@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  createChart, ColorType, CrosshairMode, LineStyle,
+  createChart, ColorType, CrosshairMode, LineStyle, LineType,
   type UTCTimestamp, type IChartApi, type ISeriesApi, type Time,
 } from "lightweight-charts";
 import s from "./chartview.module.css";
-import { de } from "@/lib/quant/num";
+import { de, money } from "@/lib/quant/num";
+
+interface Legend { o?: number; h?: number; l?: number; c?: number; v?: number; }
 
 export interface Ohlc { t?: number; o: number; h: number; l: number; c: number; v?: number; }
 
@@ -86,6 +88,7 @@ export default function BigChart({
   const wrap = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick" | "Area" | "Line" | "Histogram">[]>([]);
+  const [legend, setLegend] = useState<Legend | null>(null);
   // Erhöht sich bei Theme-Wechsel, um die Chart-Farben neu zu setzen.
   const themeTick = useThemeTick();
 
@@ -126,8 +129,11 @@ export default function BigChart({
     seriesRef.current = [];
 
     const priceFmt = { type: "price" as const, precision: 2, minMove: 0.01 };
+    const useCandles = mode === "candles" && !!candles && candles.length > 1;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let mainSeries: ISeriesApi<any>;
 
-    if (mode === "candles" && candles && candles.length > 1) {
+    if (useCandles && candles) {
       const cs = chart.addCandlestickSeries({
         upColor: UP, downColor: DOWN, wickUpColor: UP, wickDownColor: DOWN,
         borderVisible: false, priceFormat: priceFmt,
@@ -137,13 +143,15 @@ export default function BigChart({
         open: c.o, high: c.h, low: c.l, close: c.c,
       }))));
       seriesRef.current.push(cs);
+      mainSeries = cs;
     } else {
       const as = chart.addAreaSeries({
         lineColor: accent, topColor: hexA(accent, 0.22), bottomColor: hexA(accent, 0.0),
-        lineWidth: 2, priceFormat: priceFmt,
+        lineWidth: 2, lineType: LineType.Curved, priceFormat: priceFmt,
       });
       as.setData(dedupe(data.map((v, i) => ({ time: t[i] as UTCTimestamp, value: v }))));
       seriesRef.current.push(as);
+      mainSeries = as;
     }
 
     // Gleitende Durchschnitte
@@ -151,13 +159,15 @@ export default function BigChart({
       if (data.length <= p) continue;
       const vals = movingAvg(data, p, maType);
       const line = chart.addLineSeries({
-        color: MA_COLORS[p] ?? "#9aa4bd", lineWidth: 1, lineStyle: LineStyle.Solid, priceLineVisible: false, lastValueVisible: false,
+        color: MA_COLORS[p] ?? "#9aa4bd", lineWidth: 2, lineStyle: LineStyle.Solid, lineType: LineType.Curved,
+        priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
       });
       line.setData(dedupe(vals.map((v, i) => (v == null ? null : { time: t[i] as UTCTimestamp, value: v })).filter(Boolean) as { time: UTCTimestamp; value: number }[]));
       seriesRef.current.push(line);
     }
 
     // Volumen als Histogramm unten
+    let volSeries: ISeriesApi<"Histogram"> | null = null;
     if (showVolume && volumes && volumes.some((v) => v > 0)) {
       const vol = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "vol" });
       vol.setData(dedupe(volumes.map((v, i) => ({
@@ -166,9 +176,28 @@ export default function BigChart({
       }))));
       chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
       seriesRef.current.push(vol);
+      volSeries = vol;
     }
 
     chart.timeScale().fitContent();
+
+    // Werteanzeige (O/H/L/C bzw. Kurs) — Standard: letzte Kerze, sonst am Fadenkreuz.
+    const li = data.length - 1;
+    const baseLegend: Legend = useCandles && candles
+      ? { o: candles[candles.length - 1].o, h: candles[candles.length - 1].h, l: candles[candles.length - 1].l, c: candles[candles.length - 1].c, v: volumes?.[li] }
+      : { c: data[li], v: volumes?.[li] };
+    setLegend(baseLegend);
+
+    chart.subscribeCrosshairMove((param) => {
+      if (!param.time || !param.seriesData) { setLegend(baseLegend); return; }
+      const d = param.seriesData.get(mainSeries) as
+        | { open: number; high: number; low: number; close: number }
+        | { value: number } | undefined;
+      const vd = volSeries ? (param.seriesData.get(volSeries) as { value: number } | undefined) : undefined;
+      if (!d) { setLegend(baseLegend); return; }
+      if ("close" in d) setLegend({ o: d.open, h: d.high, l: d.low, c: d.close, v: vd?.value });
+      else setLegend({ c: d.value, v: vd?.value });
+    });
 
     const ro = new ResizeObserver(() => {
       if (el.clientWidth && el.clientHeight) chart.resize(el.clientWidth, el.clientHeight);
@@ -179,16 +208,36 @@ export default function BigChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, showVolume, mas.join(","), maType, currency, intraday, t, dataSig(data), candleSig(candles), themeTick]);
 
+  const m = (v?: number) => (v == null ? "—" : money(v, currency));
+  const cUp = legend && legend.o != null && legend.c != null ? legend.c >= legend.o : true;
+
   return (
     <div className={s.bigWrap}>
       <div ref={wrap} className={s.lwc} />
-      {mas.length > 0 && (
-        <div className={s.maLegend}>
-          {mas.filter((p) => data.length > p).map((p) => (
-            <span key={p} className={s.maTag} style={{ color: MA_COLORS[p] ?? "var(--text-dim)" }}>{maType === "ema" ? "EMA" : "MA"}{p}</span>
-          ))}
-        </div>
-      )}
+      <div className={s.maLegend}>
+        {legend && (
+          <div className={s.ohlc}>
+            {legend.o != null ? (
+              <>
+                <span className={s.ohlcItem}>O <b>{m(legend.o)}</b></span>
+                <span className={s.ohlcItem}>H <b>{m(legend.h)}</b></span>
+                <span className={s.ohlcItem}>T <b>{m(legend.l)}</b></span>
+                <span className={s.ohlcItem}>S <b style={{ color: cUp ? UP : DOWN }}>{m(legend.c)}</b></span>
+              </>
+            ) : (
+              <span className={s.ohlcItem}>Kurs <b>{m(legend.c)}</b></span>
+            )}
+            {legend.v != null && legend.v > 0 && <span className={s.ohlcItem}>Vol <b>{de(legend.v, 0)}</b></span>}
+          </div>
+        )}
+        {mas.filter((p) => data.length > p).length > 0 && (
+          <div className={s.maTags}>
+            {mas.filter((p) => data.length > p).map((p) => (
+              <span key={p} className={s.maTag} style={{ color: MA_COLORS[p] ?? "var(--text-dim)" }}>{maType === "ema" ? "EMA" : "MA"}{p}</span>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
