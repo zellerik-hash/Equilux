@@ -212,6 +212,67 @@ async function twelveSeries(sym: string, interval: string, outputsize: number): 
 
 const TD_INTERVAL: Record<string, string> = { "1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "60m": "1h", "1h": "1h" };
 
+/* ---------- Databento (institutionelle Tick-/Sekundendaten, US) ---------- */
+
+/** Unsere Intervalle → Databento-Schemas. Databento kennt 1s/1m/1h/1d. */
+const DB_SCHEMA: Record<string, string> = {
+  "1s": "ohlcv-1s", "1m": "ohlcv-1m", "60m": "ohlcv-1h", "1h": "ohlcv-1h",
+};
+
+/** Databento führt US-Titel als Rohsymbol; alles andere kann es hier nicht. */
+function toDatabento(sym: string): string | null {
+  const u = sym.toUpperCase();
+  if (u.startsWith("^") || u.endsWith("=X") || u.endsWith("=F")) return null;
+  if (/-(USD|EUR|USDT)$/.test(u)) return null;
+  if (u.includes(".")) return null;
+  return u;
+}
+
+/**
+ * Kerzen von Databentos Historical-API (`timeseries.get_range`, NDJSON).
+ * Preise kommen als Festkomma-Ganzzahlen (1e-9), Zeitstempel in Nanosekunden.
+ * Achtung: Databento rechnet nach Datenmenge ab — die Fenster sind deshalb
+ * bewusst knapp gewählt.
+ */
+async function databentoSeries(
+  sym: string, schema: string, startMs: number, endMs: number, limit: number,
+): Promise<Series> {
+  const key = process.env.DATABENTO_API_KEY;
+  if (!key) throw new Error("kein Databento-Schlüssel");
+  const t = toDatabento(sym);
+  if (!t) throw new Error(`Databento führt ${sym} nicht (nur US-Titel).`);
+  const dataset = process.env.DATABENTO_DATASET || "DBEQ.BASIC";
+  const params = new URLSearchParams({
+    dataset, symbols: t, schema, stype_in: "raw_symbol", encoding: "json",
+    start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString(),
+    limit: String(limit),
+  });
+  const res = await fetch(`https://hist.databento.com/v0/timeseries.get_range?${params}`, {
+    headers: { Authorization: `Basic ${Buffer.from(`${key}:`).toString("base64")}` },
+  });
+  if (!res.ok) throw new Error(`Databento ${res.status}`);
+
+  const SCALE = 1e-9;
+  const out: OHLC[] = [];
+  for (const line of (await res.text()).split("\n")) {
+    const s = line.trim();
+    if (!s) continue;
+    let r: Record<string, unknown>;
+    try { r = JSON.parse(s) as Record<string, unknown>; } catch { continue; }
+    const hd = r.hd as { ts_event?: string | number } | undefined;
+    const ts = Number(hd?.ts_event ?? r.ts_event);
+    const o = Number(r.open), h = Number(r.high), l = Number(r.low), c = Number(r.close);
+    if (!Number.isFinite(ts) || !Number.isFinite(c) || c <= 0) continue;
+    out.push({
+      t: Math.floor(ts / 1e9), o: o * SCALE, h: h * SCALE, l: l * SCALE, c: c * SCALE,
+      v: Number.isFinite(Number(r.volume)) ? Number(r.volume) : undefined,
+    });
+  }
+  if (out.length === 0) throw new Error("Databento ohne Daten im Zeitfenster");
+  out.sort((a, b) => a.t - b.t);
+  return { ohlc: out, currency: "USD" };
+}
+
 /* ---------- Polygon.io (einzige Quelle mit echten Sekundenkerzen) ---------- */
 
 /** US-Indizes, die Polygon unter `I:` führt. */
@@ -287,6 +348,12 @@ async function polygonSeries(
  */
 export async function candlesSeries(symbol: string, days = 750): Promise<Series> {
   const sym = normTicker(symbol);
+  if (process.env.DATABENTO_API_KEY && toDatabento(sym)) {
+    const end = Date.now();
+    try {
+      return await databentoSeries(sym, "ohlcv-1d", end - days * 1.7 * 86400_000, end, Math.min(days, 5000));
+    } catch { /* Fallback unten */ }
+  }
   if (process.env.POLYGON_API_KEY && toPolygon(sym)) {
     try { return await polygonSeries(sym, 1, "day", days * 1.7 * 86400_000, Math.min(days, 5000)); } catch { /* Fallback unten */ }
   }
@@ -323,7 +390,17 @@ export async function intradaySeries(
   const r = INTRADAY_RANGES.has(range) ? range : "1d";
   const iv = INTRADAY_INTERVALS.has(interval) ? interval : "5m";
 
-  // Polygon zuerst — und für Sekundenkerzen die einzige mögliche Quelle.
+  // Databento zuerst (tick-genau), dann Polygon.
+  const dbSchema = DB_SCHEMA[iv];
+  if (process.env.DATABENTO_API_KEY && dbSchema && toDatabento(sym)) {
+    const end = Date.now();
+    const limit = iv === "1s" ? 20000 : 5000;
+    // Fenster an die gewünschte Balkenzahl anpassen — Databento rechnet nach Menge ab.
+    const secPerBar = iv === "1s" ? 1 : iv === "1m" ? 60 : 3600;
+    const span = Math.max(limit * secPerBar * 1.6 * 1000, 6 * 3600_000);
+    try { return await databentoSeries(sym, dbSchema, end - span, end, limit); } catch { /* Fallback unten */ }
+  }
+
   const pg = PG_INTERVAL[iv];
   if (process.env.POLYGON_API_KEY && pg && toPolygon(sym)) {
     const win = iv === "1s" ? 2 * 86400_000 : (RANGE_MS[r] ?? 4 * 86400_000);
@@ -334,8 +411,9 @@ export async function intradaySeries(
   }
   if (iv === "1s") {
     throw new Error(
-      "Sekundenkerzen brauchen Polygon.io: POLYGON_API_KEY setzen (und einen Tarif mit Intraday-Daten). " +
-      "Polygon deckt US-Aktien, Krypto und Forex ab — für XETRA & Co. bleibt 1 Minute die feinste Stufe.",
+      "Sekundenkerzen brauchen Databento (DATABENTO_API_KEY) oder Polygon (POLYGON_API_KEY) — " +
+      "jeweils mit Intraday-Zugang. Beide führen US-Titel (Polygon zusätzlich Krypto/Forex); " +
+      "für XETRA & Co. bleibt 1 Minute die feinste Stufe — oder du wählst oben den US-Handelsplatz.",
     );
   }
 
