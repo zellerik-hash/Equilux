@@ -327,6 +327,14 @@ export default function ChartView({ focus }: { focus: string | null }) {
   return (
     <div className={`${s.chartView} ${fs ? s.fsOn : ""}`}>
       <div className={s.cvBar}>
+        {/* Titelwechsel direkt in der Leiste — im Vollbild ist die Watchlist nicht erreichbar. */}
+        <div className={s.cvSym}>
+          <TickerInput
+            onPick={(picked) => { if (solo) setSolo(picked); else setSlot(active, picked); }}
+            placeholder="Titel wechseln …"
+          />
+        </div>
+
         <span className={s.swLabel}>Layout</span>
         <div className={s.switch} role="group" aria-label="Chart-Layout">
           {LAYOUTS.map((l) => (
