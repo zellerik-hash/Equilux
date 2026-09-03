@@ -76,6 +76,23 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
 
       {data && tab === "netz" && (
         <>
+          {(() => {
+            const gaps = [
+              holders.length === 0 && data.notes.holders ? `Anteilseigner: ${data.notes.holders}` : null,
+              (suppliers.length === 0 || customers.length === 0) && data.notes.relations
+                ? `Kunden & Lieferanten: ${data.notes.relations}` : null,
+            ].filter(Boolean) as string[];
+            if (gaps.length === 0) return null;
+            return (
+              <div className={s.gaps}>
+                <span className={s.gapsTitle}>Warum hier etwas fehlt</span>
+                <ul className={s.gapsList}>
+                  {gaps.map((g, i) => <li key={i}>{g}</li>)}
+                </ul>
+              </div>
+            );
+          })()}
+
           <NetworkGraph company={company} holders={holders} suppliers={suppliers} customers={customers} />
 
           <div className={s.cols}>

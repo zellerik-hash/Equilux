@@ -33,7 +33,9 @@
 /* Vollbild: über den ganzen Bildschirm, Chrome ausgeblendet. */
 .fsOn {
   position: fixed; inset: 0; z-index: 200; margin: 0;
-  background: var(--bg); padding: 14px 18px; overflow: auto;
+  background: var(--bg); overflow: auto;
+  padding: calc(14px + env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+           calc(14px + env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
 }
 .fsOn .cvGrid { height: calc(100vh - 96px); min-height: 0; }
 .switch { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -91,4 +93,22 @@
 @media (max-width: 900px) {
   .cvGrid { grid-template-columns: 1fr !important; grid-template-rows: none !important; height: auto; min-height: 0; }
   .slot { min-height: 300px; }
+}
+
+/* Telefon: eine Leiste, die seitlich wischbar ist — statt sechs Zeilen Knöpfe. */
+@media (max-width: 760px) {
+  .cvBar {
+    flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    padding-bottom: 6px; gap: 9px;
+  }
+  .cvBar::-webkit-scrollbar { display: none; }
+  .cvBar .grow { display: none; }
+  .swLabel, .switch, .fsBtn, .cvSym { flex: none; }
+  .cvSym { width: 158px; }
+  .slot { min-height: 340px; }
+  .slotHead { flex-wrap: wrap; gap: 8px; padding: 10px 11px; }
+  .slotInfo { margin-left: 0; }
+  .maLegend { top: 4px; left: 4px; padding: 3px 6px; }
+  .ohlcItem { font-size: 8.5px; }
 }

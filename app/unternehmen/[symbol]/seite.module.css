@@ -2,7 +2,8 @@
 .page {
   max-width: 1320px;
   margin: 0 auto;
-  padding: 26px 24px 96px;
+  padding: calc(26px + env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+           calc(96px + env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
   color: var(--text);
   font-family: var(--font-sans-stack);
 }
@@ -30,5 +31,8 @@
 }
 
 @media (max-width: 720px) {
-  .page { padding: 18px 16px 64px; }
+  .page {
+    padding: calc(18px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+             calc(64px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
 }

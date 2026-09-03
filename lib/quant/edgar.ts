@@ -40,12 +40,21 @@ export interface EdgarResult {
 }
 
 let cikCache: Record<string, string> | null = null;
+/** Warum das Laden der Ticker-Liste zuletzt scheiterte — für klare Meldungen. */
+let cikLoadError: string | null = null;
 
 /** Ticker auf CIK abbilden. Die Liste wird einmal je Prozess geladen. */
 export async function resolveCik(ticker: string): Promise<string | null> {
   if (!cikCache) {
     const res = await fetch("https://www.sec.gov/files/company_tickers.json", { headers: HEADERS });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      cikLoadError = res.status === 403
+        ? "Die SEC blockt die Anfrage (403). Sie verlangt einen User-Agent mit echter Kontaktadresse — " +
+          "setze SEC_USER_AGENT, z. B. \"EQUILUX (deine@mail.de)\"."
+        : `Die SEC-Ticker-Liste ist nicht abrufbar (${res.status}).`;
+      return null;
+    }
+    cikLoadError = null;
     const raw = (await res.json()) as Record<string, { cik_str: number; ticker: string }>;
     cikCache = {};
     for (const v of Object.values(raw)) {
@@ -198,7 +207,7 @@ async function loadFiling(ticker: string): Promise<FilingLoad> {
   }
 
   const cik = await resolveCik(ticker);
-  if (!cik) return miss("Kein CIK zu diesem Kürzel gefunden.");
+  if (!cik) return miss(cikLoadError ?? `Die SEC führt kein Unternehmen unter dem Kürzel ${ticker.toUpperCase()}.`);
 
   const subRes = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, { headers: HEADERS });
   if (!subRes.ok) return miss(`SEC antwortet mit ${subRes.status}.`, cik);

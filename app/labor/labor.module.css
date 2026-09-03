@@ -16,7 +16,9 @@
   line-height: 1.5;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 24px 120px;
+  /* Sichere Bereiche des iPhone (Notch, Home-Balken) mit einrechnen. */
+  padding: 0 max(24px, env(safe-area-inset-right)) calc(120px + env(safe-area-inset-bottom))
+              max(24px, env(safe-area-inset-left));
   transition: max-width 0.28s var(--ease-in-out);
 }
 /* Chart-Modus: aus der editorialen Spalte ausbrechen, Bildschirm füllen. */
@@ -26,7 +28,7 @@
 .topbar {
   position: sticky; top: 0; z-index: 40;
   display: flex; align-items: center; gap: 16px;
-  padding: 15px 0; margin-bottom: 22px;
+  padding: calc(15px + env(safe-area-inset-top)) 0 15px; margin-bottom: 22px;
   background: color-mix(in srgb, var(--bg) 68%, transparent);
   backdrop-filter: saturate(150%) blur(12px);
   border-bottom: 1px solid var(--border);
@@ -339,7 +341,12 @@
 .ename { font-weight: 500; }
 
 @media (max-width: 720px) {
-  .shell { padding: 0 16px 64px; }
+  .shell {
+    padding: 0 max(14px, env(safe-area-inset-right)) calc(64px + env(safe-area-inset-bottom))
+                max(14px, env(safe-area-inset-left));
+  }
+  .viewBar { flex-wrap: wrap; gap: 8px; }
+  .companyBtn { margin-left: 0; }
   .leadTitle { font-size: 24px; }
   .earnings li { grid-template-columns: 1fr; gap: 3px; }
   .row { flex-direction: column; align-items: stretch; }

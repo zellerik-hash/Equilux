@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   title: "EQUILUX",
   description:
     "Quantitative Aktien-Workstation — stell dir dein eigenes Terminal aus Derivaten, Bewertung, Stat-Arb, SOTP, Filings und Marktbrief zusammen.",
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  icons: { icon: "/icon.svg", apple: "/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "EQUILUX", statusBarStyle: "black-translucent" },
 };
 
@@ -22,6 +22,8 @@ export const viewport: Viewport = {
   themeColor: "#0c0e13",
   width: "device-width",
   initialScale: 1,
+  // Randlos bis in die Ecken; die sicheren Bereiche fängt das CSS über env() ab.
+  viewportFit: "cover",
 };
 
 // Wendet die gespeicherte Theme-Wahl vor dem ersten Paint an (kein Flash).

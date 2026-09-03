@@ -24,6 +24,14 @@
   padding: 9px 12px; border-radius: 0 5px 5px 0;
 }
 
+/* Hinweis, warum Teile des Netzes leer bleiben */
+.gaps {
+  margin: 0 0 14px; padding: 11px 14px; border-radius: 0 8px 8px 0;
+  background: var(--surface-2); border-left: 2px solid var(--gold);
+}
+.gapsTitle { display: block; font: 500 10px/1 var(--font-mono-stack); letter-spacing: .16em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 7px; }
+.gapsList { margin: 0; padding-left: 18px; color: var(--text-dim); font-size: 12.5px; line-height: 1.6; }
+
 /* Netz */
 .netWrap { width: 100%; overflow-x: auto; }
 .net { width: 100%; min-width: 720px; height: auto; display: block; }

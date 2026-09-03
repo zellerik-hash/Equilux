@@ -143,3 +143,11 @@ a {
   white-space: nowrap;
   border: 0;
 }
+
+/* Touch-Verhalten für die installierte App auf iPhone/iPad */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+button, a, select, input, [role="button"], [role="tab"] {
+  -webkit-tap-highlight-color: transparent;
+}
