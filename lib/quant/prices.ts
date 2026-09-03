@@ -188,8 +188,15 @@ const TD_EXCHANGE: Record<string, string> = {
   ".HE": "OMX", ".ST": "OMX", ".CO": "OMX", ".OL": "OSE", ".VI": "VSE", ".IR": "ISE",
 };
 
+/** Offizielle Börsencodes (MIC) — Twelve Data akzeptiert sie als Alternative. */
+const TD_MIC: Record<string, string> = {
+  ".DE": "XETR", ".L": "XLON", ".AS": "XAMS", ".PA": "XPAR", ".MI": "XMIL",
+  ".MC": "XMAD", ".SW": "XSWX", ".BR": "XBRU", ".LS": "XLIS", ".VI": "XWBO",
+  ".HE": "XHEL", ".ST": "XSTO", ".CO": "XCSE", ".OL": "XOSL", ".IR": "XDUB",
+};
+
 /** Unser Ticker → Twelve-Data-Abfrage. null, wenn nicht abbildbar. */
-function toTwelve(sym: string): { symbol: string; exchange?: string } | null {
+function toTwelve(sym: string): { symbol: string; exchange?: string; mic?: string } | null {
   const u = sym.toUpperCase();
   if (u.startsWith("^") || u.endsWith("=F")) return null;      // Indizes/Futures: hier nicht
   const cx = u.match(/^([A-Z0-9]{2,6})-(USD|EUR|USDT)$/);
@@ -198,8 +205,9 @@ function toTwelve(sym: string): { symbol: string; exchange?: string } | null {
   if (fx) return { symbol: `${fx[1]}/${fx[2]}` };
   const dot = u.lastIndexOf(".");
   if (dot >= 0) {
-    const ex = TD_EXCHANGE[u.slice(dot)];
-    return ex ? { symbol: u.slice(0, dot), exchange: ex } : null;
+    const suf = u.slice(dot);
+    const ex = TD_EXCHANGE[suf];
+    return ex ? { symbol: u.slice(0, dot), exchange: ex, mic: TD_MIC[suf] } : null;
   }
   return { symbol: u };                                        // US-Titel
 }
@@ -217,23 +225,47 @@ async function twelveIntraday(sym: string, interval: string): Promise<Series> {
   if (!q) throw new Error(`Twelve Data führt ${sym} nicht.`);
   const iv = TD_INTERVAL[interval];
   if (!iv) throw new Error(`Twelve Data kennt Intervall ${interval} nicht.`);
-  const url =
-    `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(q.symbol)}` +
-    (q.exchange ? `&exchange=${encodeURIComponent(q.exchange)}` : "") +
-    `&interval=${iv}&outputsize=${TD_OUTPUTSIZE[interval] ?? 400}&format=JSON&apikey=${key}`;
-  const res = await fetch(url);
-  if (res.status === 429) throw new Error("Twelve-Data-Limit erreicht (429) — gleich noch mal versuchen.");
-  if (!res.ok) throw new Error(`Twelve Data antwortete mit ${res.status}.`);
-  const json = (await res.json()) as {
+
+  // Börsen schreibt Twelve Data uneinheitlich — erst der Klarname, dann der MIC.
+  const attempts = q.exchange
+    ? [`&exchange=${encodeURIComponent(q.exchange)}`, ...(q.mic ? [`&mic_code=${encodeURIComponent(q.mic)}`] : [])]
+    : [""];
+
+  type TdBody = {
     status?: string; message?: string;
     meta?: { currency?: string };
     values?: Array<{ datetime: string; open: string; high: string; low: string; close: string; volume?: string }>;
   };
-  if (json.status === "error" || !json.values?.length) {
-    throw new Error(json.message || `Twelve Data hat keine Intraday-Daten für ${sym}.`);
+  let json: TdBody | null = null;
+  let lastNote = "";
+  for (const venue of attempts) {
+    const url =
+      `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(q.symbol)}${venue}` +
+      `&interval=${iv}&outputsize=${TD_OUTPUTSIZE[interval] ?? 400}&format=JSON&apikey=${key}`;
+    const res = await fetch(url);
+    if (res.status === 429) throw new Error("Twelve-Data-Limit erreicht (429) — gleich noch mal versuchen.");
+    if (res.status === 401) throw new Error("Twelve Data lehnt den Schlüssel ab (401) — TWELVEDATA_API_KEY prüfen.");
+    if (res.ok) {
+      const body = (await res.json()) as TdBody;
+      if (body.status !== "error" && body.values?.length) { json = body; break; }
+      lastNote = body.message || "";
+      continue;
+    }
+    lastNote = `HTTP ${res.status}`;
   }
+
+  if (!json) {
+    const where = q.exchange ? ` an der Börse ${q.exchange}` : "";
+    throw new Error(
+      `Twelve Data findet ${sym}${where} nicht${lastNote ? ` (${lastNote})` : ""}. ` +
+      (q.exchange
+        ? "Im kostenlosen Tarif sind meist nur US-Börsen enthalten — schalte oben im Chart-Kopf auf die US-Notierung um."
+        : "Kürzel prüfen."),
+    );
+  }
+  const values = json.values ?? [];
   const out: OHLC[] = [];
-  for (const r of [...json.values].reverse()) {              // Twelve liefert neueste zuerst
+  for (const r of [...values].reverse()) {                  // Twelve liefert neueste zuerst
     const o = +r.open, h = +r.high, l = +r.low, c = +r.close;
     if (!Number.isFinite(c) || c <= 0) continue;
     out.push({
