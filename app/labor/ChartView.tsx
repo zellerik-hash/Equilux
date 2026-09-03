@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import s from "./chartview.module.css";
 import BigChart, { type Ohlc } from "./BigChart";
 import Logo from "./Logo";
 import TickerInput from "./TickerInput";
-import CompanyPanel from "./CompanyPanel";
 import { metaFor, venuesFor } from "./symbols";
 import { de, money, pct } from "@/lib/quant/num";
 
@@ -16,6 +16,7 @@ import { de, money, pct } from "@/lib/quant/num";
  *  • Doppelklick vergrößert einen Chart auf Vollansicht (Solo), erneut zurück.
  *  • Rechtsklick in der Einzelansicht öffnet einen zweiten Chart zum Belegen.
  *  • „Vollbild" spannt die Ansicht über den ganzen Bildschirm.
+ *  • „Unternehmen →" führt auf die eigene Seite mit Mindmap und News.
  */
 const STORE = "equilux-chartview-v2";
 const WATCH = "equilux-watch-v2";
@@ -262,6 +263,14 @@ export default function ChartView({ focus }: { focus: string | null }) {
                   <span className={s.slotDelta} style={{ color: change >= 0 ? "var(--up)" : "var(--down)" }}>{pct(change, 1)}</span>
                 )}
               </span>
+              <Link
+                href={`/unternehmen/${encodeURIComponent(sym)}`}
+                className={s.slotInfo}
+                onClick={(e) => e.stopPropagation()}
+                title="Unternehmen ansehen — Mindmap und News"
+              >
+                Unternehmen →
+              </Link>
               <button
                 className={s.slotX}
                 onClick={(e) => { e.stopPropagation(); isSolo ? setSolo(null) : clearSlot(i); }}
@@ -359,13 +368,9 @@ export default function ChartView({ focus }: { focus: string | null }) {
       </div>
 
       {solo ? (
-        <>
-          <div className={s.cvGrid} style={{ gridTemplateColumns: "1fr", gridTemplateRows: "1fr" }}>
-            {renderSlot(0, solo, true)}
-          </div>
-          {/* Detail-Ebene: alles zum Unternehmen, das nicht Kurs ist. */}
-          <CompanyPanel symbol={solo} />
-        </>
+        <div className={s.cvGrid} style={{ gridTemplateColumns: "1fr", gridTemplateRows: "1fr" }}>
+          {renderSlot(0, solo, true)}
+        </div>
       ) : (
         <div className={s.cvGrid} style={{ gridTemplateColumns: cols, gridTemplateRows: rows }}>
           {Array.from({ length: layout }, (_, i) => renderSlot(i, slots[i], false))}

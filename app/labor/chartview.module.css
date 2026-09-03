@@ -63,6 +63,12 @@
 .slotLast { margin-left: auto; text-align: right; display: flex; flex-direction: column; gap: 1px; }
 .slotPrice { font: 500 15px/1.1 var(--font-mono-stack); color: var(--text); }
 .slotDelta { font: 500 11px/1.1 var(--font-mono-stack); }
+.slotInfo {
+  border: 1px solid var(--border); border-radius: 7px; padding: 5px 10px; margin-left: 8px;
+  color: var(--text-dim); font: 500 11px/1 var(--font-mono-stack); text-decoration: none; white-space: nowrap;
+  transition: color .15s var(--ease-out), border-color .15s var(--ease-out);
+}
+.slotInfo:hover { color: var(--text); border-color: var(--accent); }
 .slotX { background: transparent; border: 0; color: var(--text-faint); cursor: pointer; font-size: 13px; padding: 3px 6px; border-radius: 6px; margin-left: 4px; }
 .slotX:hover { color: var(--down); }
 .slotChart { flex: 1; min-height: 0; padding: 6px 8px 10px; }
