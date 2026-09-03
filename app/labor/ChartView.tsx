@@ -5,6 +5,7 @@ import s from "./chartview.module.css";
 import BigChart, { type Ohlc } from "./BigChart";
 import Logo from "./Logo";
 import TickerInput from "./TickerInput";
+import CompanyPanel from "./CompanyPanel";
 import { metaFor, venuesFor } from "./symbols";
 import { de, money, pct } from "@/lib/quant/num";
 
@@ -358,9 +359,13 @@ export default function ChartView({ focus }: { focus: string | null }) {
       </div>
 
       {solo ? (
-        <div className={s.cvGrid} style={{ gridTemplateColumns: "1fr", gridTemplateRows: "1fr" }}>
-          {renderSlot(0, solo, true)}
-        </div>
+        <>
+          <div className={s.cvGrid} style={{ gridTemplateColumns: "1fr", gridTemplateRows: "1fr" }}>
+            {renderSlot(0, solo, true)}
+          </div>
+          {/* Detail-Ebene: alles zum Unternehmen, das nicht Kurs ist. */}
+          <CompanyPanel symbol={solo} />
+        </>
       ) : (
         <div className={s.cvGrid} style={{ gridTemplateColumns: cols, gridTemplateRows: rows }}>
           {Array.from({ length: layout }, (_, i) => renderSlot(i, slots[i], false))}

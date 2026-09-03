@@ -1,0 +1,62 @@
+/* EQUILUX — Detail-Ebene unter dem Chart. Theme-aware. */
+.panel {
+  margin-top: 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 14px 16px 18px;
+}
+.head { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; }
+.headMeta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.headSym { font: 600 13.5px/1.1 var(--font-mono-stack); color: var(--text); }
+.headName { font-size: 11.5px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabs { margin-left: auto; display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+.tab {
+  background: var(--surface); border: 0; padding: 7px 15px; cursor: pointer;
+  color: var(--text-dim); font: 500 12.5px/1 var(--font-sans-stack);
+  transition: color .15s var(--ease-out), background-color .15s var(--ease-out);
+}
+.tab:hover { color: var(--text); }
+.tabOn { background: var(--surface-2); color: var(--text); }
+
+.state { color: var(--text-dim); font-size: 13px; padding: 22px 2px; }
+.warn {
+  font-size: 12.5px; color: var(--text); margin: 0 0 12px; max-width: 76ch;
+  background: rgba(224, 85, 76, .09); border-left: 2px solid var(--down);
+  padding: 9px 12px; border-radius: 0 5px 5px 0;
+}
+
+/* Netz */
+.netWrap { width: 100%; overflow-x: auto; }
+.net { width: 100%; min-width: 720px; height: auto; display: block; }
+.netCenterName { font: 600 15px var(--font-sans-stack); fill: var(--text); }
+.netCenterSub { font: 400 10px var(--font-mono-stack); fill: var(--text-faint); }
+.netName { font: 500 11.5px var(--font-sans-stack); fill: var(--text); }
+.netMeta { font: 400 9.5px var(--font-mono-stack); fill: var(--text-faint); }
+.netAxis { font: 600 10px var(--font-mono-stack); letter-spacing: .14em; text-transform: uppercase; }
+
+/* Spalten unter dem Netz */
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-top: 16px; }
+.col { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 11px 12px; }
+.colHead { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.colDot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.colTitle { font: 500 10px/1 var(--font-mono-stack); letter-spacing: .16em; text-transform: uppercase; color: var(--text-dim); }
+.colCount { margin-left: auto; font: 500 10px/1 var(--font-mono-stack); color: var(--text-faint); }
+.colEmpty { color: var(--text-faint); font-size: 11.5px; line-height: 1.5; margin: 0; }
+.row { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: 0; }
+.rowMain { display: block; font-size: 12.5px; color: var(--text); }
+.rowSub { display: block; font: 400 10.5px/1.45 var(--font-mono-stack); color: var(--text-faint); margin-top: 2px; }
+
+.note { font-size: 12px; color: var(--text-dim); margin: 14px 0 0; max-width: 90ch; line-height: 1.55; }
+.note a { color: var(--gold); }
+.note b { color: var(--text); font-weight: 600; }
+
+/* News */
+.news { display: flex; flex-direction: column; }
+.newsItem {
+  display: flex; flex-direction: column; gap: 3px; padding: 10px 2px;
+  border-bottom: 1px solid var(--border); text-decoration: none;
+}
+.newsItem:last-child { border-bottom: 0; }
+.newsItem:hover .newsTitle { color: var(--accent); }
+.newsTitle { font-size: 13.5px; color: var(--text); line-height: 1.4; transition: color .14s var(--ease-out); }
+.newsMeta { font: 400 10.5px/1 var(--font-mono-stack); color: var(--text-faint); }
