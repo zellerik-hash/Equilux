@@ -10,7 +10,7 @@ import { de, money, pct } from "@/lib/quant/num";
 
 /**
  * Bildschirmfüllende Chart-Ansicht à la TradingView: ein großer Chart, oder
- * 2 bzw. 4 nebeneinander. Linie oder Kerzen, Tageskurse oder Intraday.
+ * 2 bzw. 4 nebeneinander. Kerzencharts in wählbarer Kerzengröße.
  *  • Klick in der Watchlist / auf einen Slot setzt den aktiven Slot.
  *  • Doppelklick vergrößert einen Chart auf Vollansicht (Solo), erneut zurück.
  *  • Rechtsklick in der Einzelansicht öffnet einen zweiten Chart zum Belegen.
@@ -43,7 +43,6 @@ const IND_OPTIONS = [
 
 const LAYOUTS = [1, 2, 4] as const;
 type Layout = (typeof LAYOUTS)[number];
-type Mode = "line" | "candles";
 
 interface Cell { loading?: boolean; closes?: number[]; ohlc?: Ohlc[]; t?: number[]; volumes?: number[]; currency?: string; source?: string; intraday?: boolean; error?: string; demo?: boolean; }
 
@@ -85,7 +84,6 @@ function guessCurrency(sym: string): string {
 
 export default function ChartView({ focus }: { focus: string | null }) {
   const [layout, setLayout] = useState<Layout>(1);
-  const [mode, setMode] = useState<Mode>("line");
   const [slots, setSlots] = useState<string[]>(["SAP.DE", "ASML.AS", "SHEL.L", "AAPL"]);
   const [active, setActive] = useState(0);
   const [tf, setTf] = useState("1d");
@@ -105,7 +103,6 @@ export default function ChartView({ focus }: { focus: string | null }) {
       if (raw) {
         const o = JSON.parse(raw);
         if (o.layout === 1 || o.layout === 2 || o.layout === 4) setLayout(o.layout);
-        if (o.mode === "line" || o.mode === "candles") setMode(o.mode);
         if (Array.isArray(o.slots)) setSlots((prev) => prev.map((v, i) => o.slots[i] ?? v));
         if (typeof o.tf === "string" && TFS.some((t) => t.id === o.tf)) setTf(o.tf);
         if (Array.isArray(o.mas)) setMas(o.mas.filter((p: number) => MA_OPTIONS.includes(p)));
@@ -134,18 +131,18 @@ export default function ChartView({ focus }: { focus: string | null }) {
   };
   useEffect(() => { readWatch(); }, [focus]);
 
-  const persist = (l: Layout, sl: string[], t: string, m: Mode, ma: number[] = mas, vol: boolean = showVol, mt: "sma" | "ema" = maType, ind: string[] = inds) => {
-    try { localStorage.setItem(STORE, JSON.stringify({ layout: l, slots: sl, tf: t, mode: m, mas: ma, showVol: vol, maType: mt, inds: ind })); } catch { /* egal */ }
+  const persist = (l: Layout, sl: string[], t: string, ma: number[] = mas, vol: boolean = showVol, mt: "sma" | "ema" = maType, ind: string[] = inds) => {
+    try { localStorage.setItem(STORE, JSON.stringify({ layout: l, slots: sl, tf: t, mas: ma, showVol: vol, maType: mt, inds: ind })); } catch { /* egal */ }
   };
   const toggleMa = (p: number) => {
     const next = mas.includes(p) ? mas.filter((x) => x !== p) : [...mas, p].sort((a, b) => a - b);
-    setMas(next); persist(layout, slots, tf, mode, next, showVol, maType, inds);
+    setMas(next); persist(layout, slots, tf, next, showVol, maType, inds);
   };
-  const chooseMaType = (mt: "sma" | "ema") => { setMaType(mt); persist(layout, slots, tf, mode, mas, showVol, mt, inds); };
-  const toggleVol = () => { const v = !showVol; setShowVol(v); persist(layout, slots, tf, mode, mas, v, maType, inds); };
+  const chooseMaType = (mt: "sma" | "ema") => { setMaType(mt); persist(layout, slots, tf, mas, showVol, mt, inds); };
+  const toggleVol = () => { const v = !showVol; setShowVol(v); persist(layout, slots, tf, mas, v, maType, inds); };
   const toggleInd = (k: string) => {
     const next = inds.includes(k) ? inds.filter((x) => x !== k) : [...inds, k];
-    setInds(next); persist(layout, slots, tf, mode, mas, showVol, maType, next);
+    setInds(next); persist(layout, slots, tf, mas, showVol, maType, next);
   };
 
   useEffect(() => {
@@ -154,7 +151,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
       if (sl[active] === focus) return sl;
       const next = [...sl];
       next[active] = focus;
-      persist(layout, next, tf, mode);
+      persist(layout, next, tf);
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,12 +190,11 @@ export default function ChartView({ focus }: { focus: string | null }) {
   const setSlot = (i: number, sym: string) => {
     const next = [...slots];
     next[i] = sym.trim().toUpperCase();
-    setSlots(next); persist(layout, next, tf, mode);
+    setSlots(next); persist(layout, next, tf);
   };
   const clearSlot = (i: number) => setSlot(i, "");
-  const chooseLayout = (l: Layout) => { setLayout(l); persist(l, slots, tf, mode); if (active >= l) setActive(0); };
-  const chooseTf = (id: string) => { setTf(id); persist(layout, slots, id, mode); };
-  const chooseMode = (m: Mode) => { setMode(m); persist(layout, slots, tf, m); };
+  const chooseLayout = (l: Layout) => { setLayout(l); persist(l, slots, tf); if (active >= l) setActive(0); };
+  const chooseTf = (id: string) => { setTf(id); persist(layout, slots, id); };
   const loadDemo = (sym: string) => {
     const def = tfById(tf);
     const cl = demoCloses(sym, def.points);
@@ -275,7 +271,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
             </div>
             {series ? (
               <>
-                <div className={s.slotChart}><BigChart data={series} candles={cell?.ohlc} times={cell?.t} volumes={cell?.volumes} mas={mas} maType={maType} showVolume={showVol} indicators={inds} currency={cur} intraday={cell?.intraday} mode={mode} /></div>
+                <div className={s.slotChart}><BigChart data={series} candles={cell?.ohlc} times={cell?.t} volumes={cell?.volumes} mas={mas} maType={maType} showVolume={showVol} indicators={inds} currency={cur} intraday={cell?.intraday} /></div>
                 <div className={s.slotFoot}>
                   <span>{de(Math.min(...series))} – {de(Math.max(...series))}</span>
                   <span>
@@ -330,11 +326,6 @@ export default function ChartView({ focus }: { focus: string | null }) {
         {layout < 4 && !solo && (
           <button className={`${s.swBtn} ${s.fsBtn}`} onClick={() => { const n = (layout === 1 ? 2 : 4) as Layout; chooseLayout(n); setActive(n - 1); }} title="Weiteren Chart hinzufügen">+ Chart</button>
         )}
-        <span className={s.swLabel} style={{ marginLeft: 8 }}>Typ</span>
-        <div className={s.switch} role="group" aria-label="Chart-Typ">
-          <button className={`${s.swBtn} ${mode === "line" ? s.swOn : ""}`} onClick={() => chooseMode("line")}>Linie</button>
-          <button className={`${s.swBtn} ${mode === "candles" ? s.swOn : ""}`} onClick={() => chooseMode("candles")}>Kerzen</button>
-        </div>
         <span className={s.swLabel} style={{ marginLeft: 8 }} title="Gleitender Durchschnitt">Ø-Linie</span>
         <div className={s.switch} role="group" aria-label="Durchschnitts-Typ">
           <button className={`${s.swBtn} ${maType === "sma" ? s.swOn : ""}`} onClick={() => chooseMaType("sma")} title="Einfacher gleitender Durchschnitt">SMA</button>

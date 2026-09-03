@@ -115,10 +115,11 @@ function layoutBands(ids: string[]): { margins: Record<string, { top: number; bo
 }
 
 /**
- * Kurschart auf Basis von TradingViews quelloffener Bibliothek
+ * Kerzenchart auf Basis von TradingViews quelloffener Bibliothek
  * `lightweight-charts`: Fadenkreuz mit Achsen-Fähnchen, beschriftete Zeit- und
  * Preisachse, Zoom (Rad/Pinch) und Verschieben (Ziehen) sind eingebaut. On top:
- * Linie oder Kerzen, gleitende Durchschnitte und ein Volumen-Histogramm.
+ * gleitende Durchschnitte, Bollinger, RSI/MACD und ein Volumen-Histogramm.
+ * Fehlen OHLC-Werte, wird ersatzweise eine Fläche gezeichnet.
  */
 export default function BigChart({
   data,
@@ -131,7 +132,6 @@ export default function BigChart({
   indicators = [],
   currency = "EUR",
   intraday = false,
-  mode = "line",
 }: {
   data: number[];
   candles?: Ohlc[];
@@ -143,7 +143,6 @@ export default function BigChart({
   indicators?: string[];
   currency?: string;
   intraday?: boolean;
-  mode?: "line" | "candles";
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -190,7 +189,7 @@ export default function BigChart({
     seriesRef.current = [];
 
     const priceFmt = { type: "price" as const, precision: 2, minMove: 0.01 };
-    const useCandles = mode === "candles" && !!candles && candles.length > 1;
+    const useCandles = !!candles && candles.length > 1;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let mainSeries: ISeriesApi<any>;
 
@@ -309,7 +308,7 @@ export default function BigChart({
 
     return () => { ro.disconnect(); chart.remove(); chartRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, showVolume, mas.join(","), maType, indicators.join(","), currency, intraday, t, dataSig(data), candleSig(candles), themeTick]);
+  }, [showVolume, mas.join(","), maType, indicators.join(","), currency, intraday, t, dataSig(data), candleSig(candles), themeTick]);
 
   const m = (v?: number) => (v == null ? "—" : money(v, currency));
   const cUp = legend && legend.o != null && legend.c != null ? legend.c >= legend.o : true;
