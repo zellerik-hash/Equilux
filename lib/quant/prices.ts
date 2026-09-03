@@ -1,10 +1,13 @@
 /**
  * EQUILUX — Kursbeschaffung für die Rechenkerne.
  *
- * Eine einzige Quelle: EODHD. Sie deckt US-Titel, Xetra, London, Euronext,
- * Krypto, Forex und Indizes ab und liefert auch die Fundamentaldaten. Nötig
- * ist dafür `EODHD_API_KEY`; ohne Schlüssel gibt es keine Kurse (die
- * Oberfläche bietet dann Demo-Daten an).
+ * Zwei Quellen, klar getrennt:
+ *   • `EODHD_API_KEY` — Tages-, Wochen- und Monatskerzen sowie Fundamentaldaten.
+ *     Deckt US-Titel, Xetra, London, Euronext, Krypto, Forex und Indizes ab.
+ *   • `TWELVEDATA_API_KEY` — Intraday-Kerzen (1 Min / 5 Min / 1 Std). Kostenloses
+ *     Kontingent; nötig, weil Intraday bei EODHD ein kostenpflichtiges
+ *     Zusatzpaket ist. Ist es dort freigeschaltet, springt EODHD als Rückfall ein.
+ * Ohne Schlüssel gibt es keine Kurse (die Oberfläche bietet dann Demo-Daten an).
  *
  * Die Rechenkerne interessiert nur, dass sie Schlusskurse bzw. OHLC-Kerzen in
  * chronologischer Reihenfolge bekommen.
@@ -176,6 +179,72 @@ async function eodhdIntraday(sym: string, interval: string, windowMs: number): P
   return { ohlc: out, currency: currencyFromSuffix(sym), source: "EODHD" };
 }
 
+/* ---------- Twelve Data (nur Intraday, kostenloses Kontingent) ---------- */
+
+/** Unser Suffix → Twelve-Data-Börsenname. */
+const TD_EXCHANGE: Record<string, string> = {
+  ".DE": "XETRA", ".L": "LSE", ".AS": "Euronext", ".PA": "Euronext",
+  ".MI": "MTA", ".MC": "BME", ".SW": "SIX", ".BR": "Euronext", ".LS": "Euronext",
+  ".HE": "OMX", ".ST": "OMX", ".CO": "OMX", ".OL": "OSE", ".VI": "VSE", ".IR": "ISE",
+};
+
+/** Unser Ticker → Twelve-Data-Abfrage. null, wenn nicht abbildbar. */
+function toTwelve(sym: string): { symbol: string; exchange?: string } | null {
+  const u = sym.toUpperCase();
+  if (u.startsWith("^") || u.endsWith("=F")) return null;      // Indizes/Futures: hier nicht
+  const cx = u.match(/^([A-Z0-9]{2,6})-(USD|EUR|USDT)$/);
+  if (cx) return { symbol: `${cx[1]}/${cx[2] === "USDT" ? "USD" : cx[2]}` };
+  const fx = u.match(/^([A-Z]{3})([A-Z]{3})=X$/);
+  if (fx) return { symbol: `${fx[1]}/${fx[2]}` };
+  const dot = u.lastIndexOf(".");
+  if (dot >= 0) {
+    const ex = TD_EXCHANGE[u.slice(dot)];
+    return ex ? { symbol: u.slice(0, dot), exchange: ex } : null;
+  }
+  return { symbol: u };                                        // US-Titel
+}
+
+const TD_INTERVAL: Record<string, string> = {
+  "1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "60m": "1h", "1h": "1h",
+};
+const TD_OUTPUTSIZE: Record<string, number> = { "1m": 390, "5m": 400, "1h": 400 };
+
+/** Intraday-Kerzen von Twelve Data. */
+async function twelveIntraday(sym: string, interval: string): Promise<Series> {
+  const key = process.env.TWELVEDATA_API_KEY;
+  if (!key) throw new Error("kein Twelve-Data-Schlüssel");
+  const q = toTwelve(sym);
+  if (!q) throw new Error(`Twelve Data führt ${sym} nicht.`);
+  const iv = TD_INTERVAL[interval];
+  if (!iv) throw new Error(`Twelve Data kennt Intervall ${interval} nicht.`);
+  const url =
+    `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(q.symbol)}` +
+    (q.exchange ? `&exchange=${encodeURIComponent(q.exchange)}` : "") +
+    `&interval=${iv}&outputsize=${TD_OUTPUTSIZE[interval] ?? 400}&format=JSON&apikey=${key}`;
+  const res = await fetch(url);
+  if (res.status === 429) throw new Error("Twelve-Data-Limit erreicht (429) — gleich noch mal versuchen.");
+  if (!res.ok) throw new Error(`Twelve Data antwortete mit ${res.status}.`);
+  const json = (await res.json()) as {
+    status?: string; message?: string;
+    meta?: { currency?: string };
+    values?: Array<{ datetime: string; open: string; high: string; low: string; close: string; volume?: string }>;
+  };
+  if (json.status === "error" || !json.values?.length) {
+    throw new Error(json.message || `Twelve Data hat keine Intraday-Daten für ${sym}.`);
+  }
+  const out: OHLC[] = [];
+  for (const r of [...json.values].reverse()) {              // Twelve liefert neueste zuerst
+    const o = +r.open, h = +r.high, l = +r.low, c = +r.close;
+    if (!Number.isFinite(c) || c <= 0) continue;
+    out.push({
+      t: Math.floor(new Date(r.datetime.replace(" ", "T") + "Z").getTime() / 1000),
+      o, h, l, c, v: r.volume ? +r.volume : undefined,
+    });
+  }
+  if (out.length === 0) throw new Error(`Twelve Data lieferte keine verwertbaren Zeilen für ${sym}.`);
+  return { ohlc: out, currency: json.meta?.currency || currencyFromSuffix(sym), source: "Twelve Data" };
+}
+
 /* ---------- Öffentliche API ---------- */
 
 /** Kursreihe in Tages-, Wochen- oder Monatskerzen (mit Währung und Quelle). */
@@ -190,13 +259,36 @@ export async function candles(symbol: string, days = 750): Promise<OHLC[]> {
 
 const INTRADAY_RANGES = new Set(["1d", "5d", "1mo"]);
 
-/** Intraday-Kerzen (1m/5m/1h) samt Währung und Quelle. */
+/**
+ * Intraday-Kerzen (1m/5m/1h) samt Währung und Quelle.
+ *
+ * Zuerst Twelve Data (kostenloses Kontingent, deckt auch Xetra ab), dann EODHD
+ * — dort sind Intraday-Daten nur mit Zusatzpaket freigeschaltet. Schlägt beides
+ * fehl, werden die Gründe zusammengefasst gemeldet.
+ */
 export async function intradaySeries(
   symbol: string, range = "1d", interval = "5m",
 ): Promise<Series> {
   const sym = normTicker(symbol);
   const r = INTRADAY_RANGES.has(range) ? range : "1d";
-  return eodhdIntraday(sym, interval, RANGE_MS[r] ?? 4 * 86400_000);
+  const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+  const errors: string[] = [];
+
+  if (process.env.TWELVEDATA_API_KEY && toTwelve(sym)) {
+    try { return await twelveIntraday(sym, interval); } catch (e) { errors.push(msg(e)); }
+  }
+  try {
+    return await eodhdIntraday(sym, interval, RANGE_MS[r] ?? 4 * 86400_000);
+  } catch (e) {
+    errors.push(msg(e));
+  }
+  if (!process.env.TWELVEDATA_API_KEY) {
+    errors.push(
+      "Tipp: Für Intraday ohne EODHD-Zusatzpaket reicht ein kostenloser Schlüssel von twelvedata.com — " +
+      "als TWELVEDATA_API_KEY hinterlegen.",
+    );
+  }
+  throw new Error(errors.join(" · "));
 }
 
 /** Schlusskurse eines Titels, älteste zuerst. */
