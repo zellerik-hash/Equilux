@@ -170,6 +170,23 @@
 .vBtn:hover { color: var(--text); }
 .vOn { background: var(--surface-2); color: var(--text); }
 
+/* Sprung auf die Unternehmensseite (Mindmap + News) */
+.companyBtn {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 9px;
+  border: 1px solid var(--border); border-radius: 10px; padding: 9px 15px;
+  color: var(--text-dim); text-decoration: none;
+  font: 600 12.5px/1 var(--font-sans-stack);
+  background: var(--surface);
+  transition: color 0.15s var(--ease-out), border-color 0.15s var(--ease-out), transform 0.14s var(--ease-out);
+}
+.companyBtn:hover { color: var(--ink); border-color: var(--accent); transform: translateY(-1px); }
+.companyIcon { color: var(--accent); font-size: 13px; line-height: 0; }
+.companySym { font: 500 11px/1 var(--mono); color: var(--faint); }
+
+@media (max-width: 720px) {
+  .companySym { display: none; }
+}
+
 @media (max-width: 900px) {
   .body, .bodyRailClosed { grid-template-columns: 1fr; }
   .rail { position: static; max-height: none; }

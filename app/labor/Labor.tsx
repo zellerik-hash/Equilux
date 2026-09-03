@@ -82,6 +82,18 @@ export default function Labor() {
                 {simple ? "Rechner" : "Werkzeuge"}
               </button>
             </div>
+
+            {focus && (
+              <Link
+                href={`/unternehmen/${encodeURIComponent(focus)}`}
+                className={s.companyBtn}
+                title={`${focus} als Unternehmen ansehen — Mindmap und News`}
+              >
+                <span className={s.companyIcon}>◍</span>
+                Unternehmen
+                <span className={s.companySym}>{focus}</span>
+              </Link>
+            )}
           </div>
 
           {view === "charts" ? <ChartView focus={focus} /> : <Werkzeuge focusModule={focusModule} />}
