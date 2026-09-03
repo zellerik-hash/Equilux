@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { toEodhd } from "@/lib/quant/prices";
+import { toEodhd, eodhdError } from "@/lib/quant/prices";
 
 export const runtime = "nodejs";
 
@@ -47,7 +47,7 @@ export async function GET(req: Request) {
       fetch(`https://eodhd.com/api/fundamentals/${encodeURIComponent(t)}?api_token=${key}&fmt=json`),
       fetch(`https://eodhd.com/api/real-time/${encodeURIComponent(t)}?api_token=${key}&fmt=json`),
     ]);
-    if (!fRes.ok) throw new Error(`EODHD antwortete mit ${fRes.status}.`);
+    if (!fRes.ok) throw eodhdError(fRes.status, symbol, false);
     const f = (await fRes.json()) as Record<string, unknown>;
     const q = qRes.ok ? ((await qRes.json()) as Record<string, unknown>) : {};
 

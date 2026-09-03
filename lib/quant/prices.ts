@@ -99,6 +99,24 @@ export const isPeriod = (v: string): v is Period => v === "d" || v === "w" || v 
 /** Zeitfenster je Range in Millisekunden. */
 const RANGE_MS: Record<string, number> = { "1d": 4 * 86400_000, "5d": 10 * 86400_000, "1mo": 45 * 86400_000 };
 
+/** HTTP-Fehler von EODHD in eine Meldung übersetzen, mit der man etwas anfangen kann. */
+export function eodhdError(status: number, sym: string, intraday: boolean): Error {
+  if (status === 401) {
+    return new Error("EODHD lehnt den Schlüssel ab (401). Prüfe, ob EODHD_API_KEY korrekt hinterlegt ist.");
+  }
+  if (status === 402 || status === 403) {
+    return new Error(
+      `EODHD verweigert den Zugriff (${status}) — dein Tarif deckt diese Abfrage nicht ab. ` +
+      (intraday
+        ? "Intraday-Kerzen (1 Min / 5 Min / 1 Std) sind bei EODHD ein eigenes Paket. Probier zum Test „1 Tag“."
+        : "Nicht-US-Börsen wie Xetra brauchen den weltweiten Tarif. Probier zum Test einen US-Titel wie AAPL."),
+    );
+  }
+  if (status === 404) return new Error(`EODHD kennt ${sym} nicht (404) — Kürzel oder Börse stimmen nicht.`);
+  if (status === 429) return new Error("EODHD-Limit erreicht (429) — zu viele Abfragen, gleich noch mal versuchen.");
+  return new Error(`EODHD antwortete mit ${status}.`);
+}
+
 function requireKey(): string {
   const key = process.env.EODHD_API_KEY;
   if (!key) {
@@ -118,7 +136,7 @@ async function eodhdDaily(sym: string, days: number, period: Period = "d"): Prom
   const from = new Date(Date.now() - days * 1.7 * 86400_000).toISOString().slice(0, 10);
   const url = `https://eodhd.com/api/eod/${encodeURIComponent(t)}?api_token=${key}&fmt=json&period=${period}&from=${from}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`EODHD antwortete mit ${res.status}.`);
+  if (!res.ok) throw eodhdError(res.status, sym, false);
   const rows = (await res.json()) as Array<{ date: string; open: number; high: number; low: number; close: number; volume?: number }>;
   if (!Array.isArray(rows) || rows.length === 0) throw new Error(`EODHD hat keine Tageskurse für ${sym}.`);
   const out: OHLC[] = [];
@@ -145,7 +163,7 @@ async function eodhdIntraday(sym: string, interval: string, windowMs: number): P
   const from = to - Math.floor(windowMs / 1000);
   const url = `https://eodhd.com/api/intraday/${encodeURIComponent(t)}?api_token=${key}&fmt=json&interval=${iv}&from=${from}&to=${to}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`EODHD antwortete mit ${res.status}.`);
+  if (!res.ok) throw eodhdError(res.status, sym, true);
   const rows = (await res.json()) as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume?: number }>;
   if (!Array.isArray(rows) || rows.length === 0) throw new Error(`EODHD hat keine Intraday-Daten für ${sym}.`);
   const out: OHLC[] = [];
