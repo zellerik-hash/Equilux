@@ -17,7 +17,7 @@ import { pctPlain } from "@/lib/quant/num";
  * dort, warum — statt einer stillen Lücke.
  */
 interface NewsItem { title: string; url: string; date: string; source?: string }
-interface Holder { name: string; share: number | null; kind: "institution" | "fonds" }
+interface Holder { name: string; share: number | null; kind: "institution" | "fonds" | "sec" }
 interface Customer { name: string | null; share: number | null; context: string }
 interface Supplier { name: string; context: string }
 interface Dossier {
@@ -27,9 +27,16 @@ interface Dossier {
   holders: Holder[];
   customers: Customer[];
   suppliers: Supplier[];
+  holderSource: "EODHD" | "SEC" | null;
   filing: { form: string | null; filed: string | null; url: string | null } | null;
   notes: { news?: string; holders?: string; relations?: string };
 }
+
+const HOLDER_KIND: Record<Holder["kind"], string> = {
+  institution: "Institution",
+  fonds: "Fonds",
+  sec: "Meldung über 5 %",
+};
 
 type Tab = "netz" | "news";
 
@@ -103,7 +110,7 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
               rows={data.holders.map((h, i) => ({
                 key: `${h.name}#${i}`,
                 main: h.name,
-                sub: `${h.kind === "fonds" ? "Fonds" : "Institution"}${h.share != null ? ` · ${pctPlain(h.share, 2)}` : ""}`,
+                sub: `${HOLDER_KIND[h.kind]}${h.share != null ? ` · ${pctPlain(h.share, 2)}` : ""}`,
               }))}
             />
             <Column
@@ -125,7 +132,10 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
           </div>
 
           <p className={s.note}>
-            <b>Woher das kommt:</b> Anteilseigner aus den Fundamentaldaten; Kunden und Lieferanten
+            <b>Woher das kommt:</b> Anteilseigner{" "}
+            {data.holderSource === "SEC"
+              ? "aus den Beteiligungsmeldungen an die SEC (SC 13D/G) — dort muss jeder melden, der mehr als 5 % hält; kleinere Positionen tauchen deshalb nicht auf"
+              : "aus den Fundamentaldaten"}; Kunden und Lieferanten
             werden aus dem jüngsten US-Geschäftsbericht herausgelesen
             {data.filing?.url && (
               <> (<a href={data.filing.url} target="_blank" rel="noopener noreferrer">

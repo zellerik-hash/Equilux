@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { toEodhd } from "@/lib/quant/prices";
-import { edgarRelations } from "@/lib/quant/edgar";
+import { edgarRelations, edgarHolders } from "@/lib/quant/edgar";
 
 export const runtime = "nodejs";
 
@@ -8,7 +8,9 @@ export const runtime = "nodejs";
  * Unternehmens-Dossier für die Detail-Ebene unter dem Chart: `?symbol=NVDA`
  *
  *   • news       — aktuelle Meldungen (EODHD News-API)
- *   • holders    — wer Anteile hält (EODHD Fundamentals → Holders)
+ *   • holders    — wer Anteile hält. Erst die EODHD-Fundamentaldaten; sind sie
+ *                  im Tarif nicht enthalten, die SEC-Beteiligungsmeldungen
+ *                  (SC 13D/G, alles über 5 %) — die sind kostenlos.
  *   • customers  — wer die Produkte kauft (SEC-Filing, nur US-Titel)
  *   • suppliers  — von wem eingekauft wird (SEC-Filing, nur US-Titel)
  *
@@ -17,7 +19,8 @@ export const runtime = "nodejs";
  */
 
 interface NewsItem { title: string; url: string; date: string; source?: string }
-interface Holder { name: string; share: number | null; kind: "institution" | "fonds" }
+/** `sec` kommt aus einer Beteiligungsmeldung über 5 %, nicht aus einem Datenvertrag. */
+interface Holder { name: string; share: number | null; kind: "institution" | "fonds" | "sec" }
 interface Notes { news?: string; holders?: string; relations?: string }
 
 function num(v: unknown): number | null {
@@ -26,7 +29,7 @@ function num(v: unknown): number | null {
 }
 
 /** EODHD liefert Holders als Objekt mit laufenden Schlüsseln — flach machen. */
-function flattenHolders(raw: unknown, kind: Holder["kind"]): Holder[] {
+function flattenHolders(raw: unknown, kind: "institution" | "fonds"): Holder[] {
   if (!raw || typeof raw !== "object") return [];
   const out: Holder[] = [];
   for (const v of Object.values(raw as Record<string, unknown>)) {
@@ -114,8 +117,25 @@ export async function GET(req: Request) {
     })),
   ]);
 
+  // Anteilseigner: was der Tarif nicht hergibt, holen wir uns bei der SEC.
+  let holderItems = holders.items;
+  let holderNote = holders.note;
+  let holderSource: "EODHD" | "SEC" | null = holderItems.length ? "EODHD" : null;
+  if (holderItems.length === 0) {
+    const sec = await edgarHolders(symbol).catch((e) => ({
+      holders: [], available: false, note: String(e?.message ?? e),
+    }));
+    if (sec.holders.length) {
+      holderItems = sec.holders.map((h) => ({ name: h.name, share: h.share, kind: "sec" as const }));
+      holderSource = "SEC";
+      holderNote = undefined;
+    } else if (sec.note) {
+      holderNote = `${holders.note ? holders.note + " " : ""}Ersatzweise die SEC-Beteiligungsmeldungen: ${sec.note}`;
+    }
+  }
+
   if (news.note) notes.news = news.note;
-  if (holders.note) notes.holders = holders.note;
+  if (holderNote) notes.holders = holderNote;
   if (relations.note) notes.relations = relations.note;
 
   return NextResponse.json({
@@ -123,7 +143,8 @@ export async function GET(req: Request) {
     symbol,
     name: holders.name ?? null,
     news: news.items,
-    holders: holders.items,
+    holders: holderItems,
+    holderSource,
     customers: relations.customers,
     suppliers: relations.suppliers,
     filing: relations.available ? { form: relations.form, filed: relations.filed, url: relations.url } : null,

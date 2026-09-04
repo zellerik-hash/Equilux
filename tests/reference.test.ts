@@ -16,6 +16,7 @@ import {
 } from "@/lib/quant/statarb";
 import { valuation, type ValuationInput } from "@/lib/quant/valuation";
 import { rsi, atr, sma, risk, type Candle } from "@/lib/quant/indicators";
+import { extractOwnership } from "@/lib/quant/edgar";
 
 // ── Mini-Harness ─────────────────────────────────────────────────────────────
 let passed = 0;
@@ -248,6 +249,40 @@ section("Risiko — Kennzahlen einer streng steigenden Kurve");
   ok("Streng steigende Kurve: Trefferquote 100 %", Math.abs(rk.winRate - 100) < 1e-9, `${rk.winRate}`);
   ok("Positive Jahresrendite", rk.annReturn > 0, `${rk.annReturn}`);
   ok("Kennzahlen endlich", Number.isFinite(rk.sharpe) && Number.isFinite(rk.annVol));
+}
+
+// ── 12. SEC-Beteiligungsmeldungen — Deckblatt lesen ──────────────────────────
+section("SEC 13D/G — Name und Anteil aus dem Deckblatt");
+{
+  // Altes Format: Deckblatt als Tabelle, nach dem Strippen der Tags reiner Text.
+  const alt = `
+    <html><body><table><tr><td>1</td><td>NAME OF REPORTING PERSON<br/>
+    I.R.S. IDENTIFICATION NO. OF ABOVE PERSON</td><td>The Vanguard Group</td></tr>
+    <tr><td>2</td><td>CHECK THE APPROPRIATE BOX IF A MEMBER OF A GROUP</td></tr>
+    <tr><td>13</td><td>PERCENT OF CLASS REPRESENTED BY AMOUNT IN ROW (11)</td>
+    <td>8.42%</td></tr></table></body></html>`;
+  const a = extractOwnership(alt);
+  ok("Altes Deckblatt: Name gelesen", a.name === "The Vanguard Group", String(a.name));
+  near("Altes Deckblatt: Anteil 8,42 %", a.share ?? -1, 0.0842, 1e-12);
+
+  // Neues Format: seit der 13D/G-Umstellung nimmt die SEC XML entgegen.
+  const neu = `<?xml version="1.0"?><edgarSubmission><formData><coverPageHeader>
+    <filerInfo><reportingPersonName>BlackRock, Inc.</reportingPersonName></filerInfo>
+    <aggregatedAmount><percentOfClass>6.7</percentOfClass></aggregatedAmount>
+    </coverPageHeader></formData></edgarSubmission>`;
+  const b = extractOwnership(neu);
+  ok("XML-Deckblatt: Name gelesen", b.name === "BlackRock, Inc.", String(b.name));
+  near("XML-Deckblatt: Anteil 6,7 %", b.share ?? -1, 0.067, 1e-12);
+
+  // Beschriftungen des Formulars dürfen nicht als Name durchgehen.
+  const leer = extractOwnership("<p>CHECK THE APPROPRIATE BOX</p><p>SEC USE ONLY</p>");
+  ok("Ohne Meldenden: kein Name erfunden", leer.name === null, String(leer.name));
+
+  // Unsinnige Prozentwerte werden verworfen, nicht durchgereicht.
+  const wild = extractOwnership(
+    "NAME OF REPORTING PERSON  Acme Capital LLC   PERCENT OF CLASS REPRESENTED BY AMOUNT IN ROW (11) 420%",
+  );
+  ok("Anteil über 100 % wird verworfen", wild.share === null, String(wild.share));
 }
 
 // ── Ergebnis ─────────────────────────────────────────────────────────────────
