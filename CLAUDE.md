@@ -92,8 +92,32 @@ Drittabruf aus dem Browser, Tracking), muss den Abschnitt mitziehen.
 Die Seite muss von überall erreichbar bleiben: `Nav.tsx`, Startseiten-Fußzeile
 und Labor-Kopfzeile verlinken sie.
 
+## Datenquellen und ihre Rückfälle
+
+Jeder Block hat eine kostenlose Ausweichquelle, damit nichts an einem Tarif
+hängt. Reihenfolge ist immer: bezahlte Quelle zuerst, dann der freie Rückfall,
+und wenn beides ausfällt, ein Satz der sagt **warum** — nie eine stille Lücke.
+
+| Block | Erst | Dann |
+|---|---|---|
+| Anteilseigner | EODHD Fundamentals | SEC SC 13D/G (nur > 5 %, nur US) |
+| Kursziel/Analysten | EODHD AnalystRatings | Alpha Vantage `OVERVIEW` (nur US) |
+| Kennzahlen | EODHD Fundamentals | Alpha Vantage `OVERVIEW` |
+| Intraday | Twelve Data | EODHD (dort kostenpflichtig) |
+
+Alpha Vantage meldet Kontingent- und Fehlerfälle mit **Status 200** und einem
+Hinweistext (`Note` / `Information`) — der Statuscode allein genügt nicht.
+Freier Tarif: rund 25 Abrufe am Tag, deshalb zwölf Stunden Zwischenspeicher,
+auch für Fehlversuche.
+
 ## Grenzen / keine Anlageberatung
 
 Kein Live-Order-Routing, keine Portfoliosteuerung, keine Kauf-/Verkaufs-
 empfehlung im Output. Beschreibe Lage und Risiken, bewerte nicht. Wenn eine
 Funktion in die Nähe von Anlageempfehlung gerät, bau sie nicht und sag warum.
+
+**Fremdmeinung ist davon nicht betroffen, aber muss als solche kenntlich sein:**
+Analystenurteile und Kursziele Dritter zu referieren ist zulässig — sie stehen
+im Reiter „Analysten" mit ausdrücklichem Hinweis, dass EQUILUX selbst kein
+Kursziel nennt. Keine gemittelte Konsensnote: die Skalen der Häuser sind nicht
+einheitlich gerichtet, ein Mittelwert daraus wäre Scheingenauigkeit.

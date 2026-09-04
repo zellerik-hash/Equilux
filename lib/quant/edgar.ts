@@ -14,7 +14,26 @@
  * begrenzt auf zehn Anfragen je Sekunde.
  */
 
-const SEC_UA = process.env.SEC_USER_AGENT ?? "EQUILUX research tool (kontakt@example.com)";
+/**
+ * Die SEC verlangt in jeder Anfrage einen User-Agent mit einer echten
+ * Kontaktadresse. Ist keiner hinterlegt, schicken wir bewusst eine erkennbare
+ * Platzhalter-Kennung — dann wissen wir bei einem 403 sicher, woran es liegt,
+ * statt es aus dem Statuscode raten zu müssen.
+ */
+const SEC_UA_CONFIGURED = Boolean(process.env.SEC_USER_AGENT?.trim());
+const SEC_UA = process.env.SEC_USER_AGENT?.trim() || "EQUILUX (kein SEC_USER_AGENT gesetzt)";
+
+/** Erklärt einen 403 der SEC — mit dem Unterschied, der hier zählt. */
+function forbiddenNote(): string {
+  return SEC_UA_CONFIGURED
+    ? "Die SEC weist die Anfrage ab (403), obwohl SEC_USER_AGENT gesetzt ist. Das passiert, " +
+      "wenn die Kennung keine echte Adresse enthält oder zu viele Anfragen von derselben " +
+      "Adresse kamen — in ein paar Minuten noch einmal versuchen."
+    : "SEC_USER_AGENT ist nicht gesetzt, deshalb weist die SEC die Anfrage ab (403). " +
+      "Sie verlangt eine Kennung mit echter Kontaktadresse — auf Vercel unter " +
+      "Settings → Environment Variables anlegen: SEC_USER_AGENT = \"EQUILUX (deine@mail.de)\", " +
+      "danach neu deployen.";
+}
 
 /** Ein 10-K kann zweistellige Megabyte haben — so viel Text reicht für die Muster. */
 const MAX_FILING_CHARS = 4_000_000;
@@ -76,8 +95,7 @@ export async function resolveCik(ticker: string): Promise<string | null> {
     }
     if (!res.ok) {
       cikLoadError = res.status === 403
-        ? "Die SEC blockt die Anfrage (403). Sie verlangt einen User-Agent mit echter Kontaktadresse — " +
-          "setze SEC_USER_AGENT, z. B. \"EQUILUX (deine@mail.de)\"."
+        ? forbiddenNote()
         : `Die SEC-Ticker-Liste ist nicht abrufbar (${res.status}).`;
       return null;
     }
@@ -245,7 +263,7 @@ interface Recent {
  */
 async function submissions(cik: string, deep = false): Promise<{ recent: Recent; note?: string }> {
   const res = await secFetch(`https://data.sec.gov/submissions/CIK${cik}.json`);
-  if (!res.ok) return { recent: {}, note: `SEC antwortet mit ${res.status}.` };
+  if (!res.ok) return { recent: {}, note: res.status === 403 ? forbiddenNote() : `SEC antwortet mit ${res.status}.` };
   const sub = (await res.json()) as {
     filings?: { recent?: Recent; files?: Array<{ name: string }> };
   };

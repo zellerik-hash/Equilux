@@ -5,7 +5,7 @@ import s from "./company.module.css";
 import NetworkGraph, { type NetNode } from "./NetworkGraph";
 import Logo from "./Logo";
 import { metaFor } from "./symbols";
-import { pctPlain } from "@/lib/quant/num";
+import { de, money, pct, pctPlain } from "@/lib/quant/num";
 
 /**
  * Detail-Ebene unter dem Chart: alles zum Unternehmen, das nicht Kurs ist.
@@ -28,8 +28,9 @@ interface Dossier {
   customers: Customer[];
   suppliers: Supplier[];
   holderSource: "EODHD" | "SEC" | null;
+  analysts: Analysts | null;
   filing: { form: string | null; filed: string | null; url: string | null } | null;
-  notes: { news?: string; holders?: string; relations?: string };
+  notes: { news?: string; holders?: string; relations?: string; analysts?: string };
 }
 
 const HOLDER_KIND: Record<Holder["kind"], string> = {
@@ -38,7 +39,16 @@ const HOLDER_KIND: Record<Holder["kind"], string> = {
   sec: "Meldung über 5 %",
 };
 
-type Tab = "netz" | "news";
+interface Ratings { strongBuy: number; buy: number; hold: number; sell: number; strongSell: number }
+interface Analysts {
+  target: number | null;
+  ratings: Ratings | null;
+  price: number | null;
+  currency: string | null;
+  source: "EODHD" | "Alpha Vantage";
+}
+
+type Tab = "netz" | "news" | "analysten";
 
 export default function CompanyPanel({ symbol }: { symbol: string }) {
   const [tab, setTab] = useState<Tab>("netz");
@@ -75,6 +85,7 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
         <div className={s.tabs} role="tablist" aria-label="Unternehmens-Details">
           <button role="tab" aria-selected={tab === "netz"} className={`${s.tab} ${tab === "netz" ? s.tabOn : ""}`} onClick={() => setTab("netz")}>Netz</button>
           <button role="tab" aria-selected={tab === "news"} className={`${s.tab} ${tab === "news" ? s.tabOn : ""}`} onClick={() => setTab("news")}>News</button>
+          <button role="tab" aria-selected={tab === "analysten"} className={`${s.tab} ${tab === "analysten" ? s.tabOn : ""}`} onClick={() => setTab("analysten")}>Analysten</button>
         </div>
       </header>
 
@@ -161,7 +172,94 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
           ))}
         </div>
       )}
+      {data && tab === "analysten" && <AnalystView a={data.analysts} note={data.notes.analysts} />}
     </section>
+  );
+}
+
+/**
+ * Kursziele und Urteilsverteilung — ausdrücklich als Fremdmeinung.
+ *
+ * EQUILUX nennt selbst keine Kursziele und gibt keine Empfehlung ab; hier steht
+ * referierend, was Analystenhäuser veröffentlicht haben. Deshalb auch keine
+ * Konsensnote als eine Zahl, sondern die Verteilung: dass acht Häuser kaufen
+ * sagen und vier halten, ist eine Tatsache — daraus eine Note zu mitteln wäre
+ * schon eine Wertung.
+ */
+function AnalystView({ a, note }: { a: Analysts | null; note?: string }) {
+  if (!a) {
+    return (
+      <div className={s.analyst}>
+        <p className={s.warn}>{note ?? "Keine Analystendaten verfügbar."}</p>
+        <p className={s.note}>
+          Analystenurteile und Kursziele sind — anders als Kurse oder Beteiligungsmeldungen —
+          keine öffentlichen Daten, sondern lizenzierte Bankresearch-Auswertungen. EQUILUX zieht
+          sie aus den EODHD-Fundamentaldaten oder ersatzweise von Alpha Vantage; für Letzteres
+          genügt ein kostenloser Schlüssel.
+        </p>
+      </div>
+    );
+  }
+
+  const r = a.ratings;
+  const total = r ? r.strongBuy + r.buy + r.hold + r.sell + r.strongSell : 0;
+  const kaufen = r ? r.strongBuy + r.buy : 0;
+  const halten = r ? r.hold : 0;
+  const verkaufen = r ? r.sell + r.strongSell : 0;
+  const cur = a.currency ?? "USD";
+  const gap = a.target != null && a.price != null && a.price > 0 ? (a.target - a.price) / a.price : null;
+
+  return (
+    <div className={s.analyst}>
+      <p className={s.fremd}>
+        <b>Fremdmeinung.</b> Das hier ist referiert, nicht gerechnet: veröffentlichte Urteile und
+        Kursziele von Analystenhäusern. EQUILUX gibt selbst kein Kursziel und keine Empfehlung ab.
+        Kursziele liegen im Mittel systematisch über dem späteren Kurs — sie sind ein Stimmungsbild,
+        keine Prognose.
+      </p>
+
+      <div className={s.aGrid}>
+        <div className={s.aCard}>
+          <span className={s.aLabel}>Median-Kursziel</span>
+          <span className={s.aValue}>{a.target != null ? money(a.target, cur) : "k. A."}</span>
+          {a.price != null && <span className={s.aSub}>aktuell {money(a.price, cur)}</span>}
+        </div>
+        <div className={s.aCard}>
+          <span className={s.aLabel}>Abstand zum Kurs</span>
+          <span className={s.aValue} style={{ color: gap == null ? undefined : gap >= 0 ? "var(--up)" : "var(--down)" }}>
+            {gap == null ? "k. A." : pct(gap, 1)}
+          </span>
+          <span className={s.aSub}>keine Renditeerwartung</span>
+        </div>
+        <div className={s.aCard}>
+          <span className={s.aLabel}>Auswertende Häuser</span>
+          <span className={s.aValue}>{total > 0 ? de(total, 0) : "k. A."}</span>
+          <span className={s.aSub}>Quelle: {a.source}</span>
+        </div>
+      </div>
+
+      {total > 0 && (
+        <div className={s.aDist}>
+          <div className={s.aBar}>
+            <span style={{ width: `${(kaufen / total) * 100}%`, background: "var(--up)" }} title={`Kaufen: ${kaufen}`} />
+            <span style={{ width: `${(halten / total) * 100}%`, background: "var(--text-faint)" }} title={`Halten: ${halten}`} />
+            <span style={{ width: `${(verkaufen / total) * 100}%`, background: "var(--down)" }} title={`Verkaufen: ${verkaufen}`} />
+          </div>
+          <div className={s.aLegend}>
+            <span><i style={{ background: "var(--up)" }} />Kaufen {kaufen} · {pctPlain(kaufen / total, 0)}</span>
+            <span><i style={{ background: "var(--text-faint)" }} />Halten {halten} · {pctPlain(halten / total, 0)}</span>
+            <span><i style={{ background: "var(--down)" }} />Verkaufen {verkaufen} · {pctPlain(verkaufen / total, 0)}</span>
+          </div>
+        </div>
+      )}
+
+      <p className={s.note}>
+        Die Verteilung fasst die fünf gemeldeten Stufen zusammen: „Kaufen" enthält Strong Buy und
+        Buy, „Verkaufen" Sell und Strong Sell. Eine gemittelte Konsensnote steht bewusst nicht da —
+        die Skalen der Häuser sind nicht einheitlich gerichtet, ein Mittelwert daraus wäre eine
+        Scheingenauigkeit.
+      </p>
+    </div>
   );
 }
 

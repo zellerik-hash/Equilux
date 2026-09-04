@@ -68,3 +68,62 @@
 .newsItem:hover .newsTitle { color: var(--accent); }
 .newsTitle { font-size: 13.5px; color: var(--text); line-height: 1.4; transition: color .14s var(--ease-out); }
 .newsMeta { font: 400 10.5px/1 var(--font-mono-stack); color: var(--text-faint); }
+
+/* ── Analysten: Kursziel und Urteilsverteilung ─────────────────────────── */
+.analyst { display: flex; flex-direction: column; gap: 16px; }
+
+/* Der Kasten, der klarstellt, dass hier referiert und nicht gerechnet wird. */
+.fremd {
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--newyork);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.fremd b { color: var(--text); }
+
+.aGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.aCard {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.aLabel {
+  font: 500 10px/1 var(--font-mono-stack);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.aValue { font: 600 21px/1.1 var(--font-mono-stack); color: var(--text); }
+.aSub { font: 400 11px/1.3 var(--font-mono-stack); color: var(--text-faint); }
+
+.aDist { display: flex; flex-direction: column; gap: 9px; }
+.aBar {
+  display: flex;
+  height: 15px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.aBar span { display: block; transition: width .3s var(--ease-out); }
+.aLegend { display: flex; flex-wrap: wrap; gap: 18px; }
+.aLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 500 11.5px/1 var(--font-mono-stack);
+  color: var(--text-dim);
+}
+.aLegend i { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+
+@media (max-width: 720px) {
+  .aGrid { grid-template-columns: 1fr; }
+}

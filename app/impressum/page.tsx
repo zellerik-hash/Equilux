@@ -257,14 +257,23 @@ export default function ImpressumSeite() {
             <b>Twelve Data</b> (twelvedata.com) — Intraday-Kurse (1 Minute, 5 Minuten, 1 Stunde).
           </li>
           <li>
-            <b>SEC EDGAR</b> (sec.gov) — Kunden und Lieferanten, automatisch aus dem jüngsten
-            10-K/20-F herausgelesen. Nur für US-notierte Werte.
+            <b>SEC EDGAR</b> (sec.gov) — Kunden und Lieferanten aus dem jüngsten 10-K/20-F sowie
+            Anteilseigner aus den Beteiligungsmeldungen (SC 13D/G). Nur für US-notierte Werte.
+          </li>
+          <li>
+            <b>Alpha Vantage</b> (alphavantage.co) — Kursziele und Analystenurteile, ersatzweise
+            auch Fundamentalkennzahlen.
           </li>
           <li>
             <b>Anthropic</b> (anthropic.com) — sprachliche Zusammenfassung im Marktbrief. Der
             Marktbrief ist eine Zusammenfassung, keine Prognose.
           </li>
         </ul>
+        <p>
+          <b>Analystenurteile und Kursziele</b> sind Veröffentlichungen Dritter und werden hier
+          unverändert referiert. Sie sind weder eine Aussage noch eine Empfehlung von EQUILUX.
+          Kursziele liegen empirisch im Mittel über dem später tatsächlich erreichten Kurs.
+        </p>
         <p>
           Kurse sind je nach Quelle und Tarif <b>verzögert</b> und nicht handelsgeeignet. Sie eignen
           sich zur Recherche, nicht zur Ausführung. Die Abfrage der Anbieter erfolgt serverseitig;
