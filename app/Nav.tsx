@@ -13,11 +13,15 @@ export default function Nav() {
 
   return (
     <nav className={s.nav}>
-      <Link href="/" className={s.brand}>EQUILUX</Link>
+      <Link href="/" className={s.brand}>
+        {/* Das Zeichen liegt als Datei vor und bleibt so mit dem App-Icon identisch. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icon.svg" alt="" className={s.mark} width={26} height={26} />
+        EQUILUX
+      </Link>
       <div className={s.right}>
         <ModeToggle />
         <Link href="/impressum" className={s.linkQuiet}>Impressum</Link>
-        <Link href="/labor" className={s.link}>Terminal öffnen</Link>
         <ThemeToggle />
       </div>
     </nav>

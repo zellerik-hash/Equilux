@@ -15,9 +15,20 @@
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
   font: 500 14px/1 var(--font-mono-stack);
   letter-spacing: 0.26em;
   color: var(--gold);
+}
+/* Das Zeichen steht auf eigenem dunklem Grund, deshalb in beiden Themes gleich. */
+.mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  flex: none;
+  display: block;
 }
 
 .right {

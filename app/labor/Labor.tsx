@@ -61,7 +61,11 @@ export default function Labor() {
   return (
     <div className={`${s.shell} ${view === "charts" ? s.shellWide : ""}`}>
       <header className={s.topbar}>
-        <Link href="/" className={s.brandMark}>EQUILUX</Link>
+        <Link href="/" className={s.brandMark}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.svg" alt="" className={s.brandIcon} width={22} height={22} />
+          EQUILUX
+        </Link>
         <Link href="/" className={s.backLink}>← Übersicht</Link>
         <Link href="/impressum" className={s.legalLink} title="Impressum, Risikohinweis, Datenschutz">Impressum</Link>
         <div className={s.topRight}>

@@ -33,7 +33,8 @@
   backdrop-filter: saturate(150%) blur(12px);
   border-bottom: 1px solid var(--border);
 }
-.brandMark { font: 500 14px/1 var(--mono); letter-spacing: 0.24em; color: var(--gold); }
+.brandMark { display: inline-flex; align-items: center; gap: 10px; font: 500 14px/1 var(--mono); letter-spacing: 0.24em; color: var(--gold); }
+.brandIcon { width: 22px; height: 22px; border-radius: 5px; flex: none; display: block; }
 .backLink { font: 400 11px/1 var(--mono); letter-spacing: 0.05em; color: var(--faint); margin-left: 2px; transition: color 0.16s var(--ease-out); }
 .backLink:hover { color: var(--ink); }
 /* Pflichtangabe — muss von jeder Seite aus erreichbar sein, auch aus der Shell. */
