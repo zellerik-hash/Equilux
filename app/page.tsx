@@ -157,6 +157,8 @@ export default function Home() {
         {simple
           ? "Kein Anlageberatungswerkzeug · Bewertung & Derivate laufen offline · Next.js 14 · TypeScript"
           : "Kein Anlageberatungswerkzeug · Rechenkerne auf der Standardbibliothek · Next.js 14 · TypeScript Strict"}
+        {" · "}
+        <Link href="/impressum" className={s.footLink}>Impressum & Risikohinweis</Link>
       </p>
     </main>
   );

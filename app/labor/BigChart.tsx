@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createChart, ColorType, CrosshairMode, LineStyle, LineType,
   type UTCTimestamp, type IChartApi, type ISeriesApi, type Time,
@@ -92,12 +92,28 @@ function bollingerSeries(closes: number[], n = 20, k = 2): { upper: (number | nu
   const mid: (number | null)[] = new Array(closes.length).fill(null);
   const lower: (number | null)[] = new Array(closes.length).fill(null);
   for (let i = n - 1; i < closes.length; i++) {
-    const s = closes.slice(i - n + 1, i + 1);
-    const m = s.reduce((a, v) => a + v, 0) / n;
-    const sd = Math.sqrt(s.reduce((a, v) => a + (v - m) ** 2, 0) / n);
+    const win = closes.slice(i - n + 1, i + 1);
+    const m = win.reduce((a, v) => a + v, 0) / n;
+    const sd = Math.sqrt(win.reduce((a, v) => a + (v - m) ** 2, 0) / n);
     mid[i] = m; upper[i] = m + k * sd; lower[i] = m - k * sd;
   }
   return { upper, mid, lower };
+}
+
+/**
+ * Nachkommastellen aus der Größenordnung ableiten. Zwei Stellen sind für Aktien
+ * richtig, für ein Devisenpaar (1,0842) oder eine Kryptowährung mit Kurs 0,0000x
+ * dagegen unbrauchbar — dort würde jede Kerze auf denselben Wert gerundet.
+ */
+function digitsFor(values: number[]): number {
+  const v = values.filter((x) => Number.isFinite(x) && x > 0);
+  if (v.length === 0) return 2;
+  const min = Math.min(...v);
+  if (min >= 100) return 2;
+  if (min >= 1) return min < 10 ? 3 : 2;
+  if (min >= 0.01) return 4;
+  if (min >= 0.0001) return 6;
+  return 8;
 }
 
 /** Untere Panels (Volumen/RSI/MACD) von unten nach oben stapeln. */
@@ -153,6 +169,8 @@ export default function BigChart({
 
   // Zeitstempel sicherstellen (aufsteigend, eindeutig) — sonst wirft die Lib.
   const t = useResolvedTimes(times, data.length, intraday);
+  // Nachkommastellen einmal je Reihe: Achse, Fadenkreuz und Werteanzeige gleich.
+  const digits = useMemo(() => digitsFor(data), [dataSig(data)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const el = wrap.current;
@@ -179,7 +197,7 @@ export default function BigChart({
       timeScale: { borderColor: grid, timeVisible: intraday, secondsVisible: false, rightOffset: 4 },
       localization: {
         locale: "de-DE",
-        priceFormatter: (p: number) => `${de(p, 2)} ${sym}`.trim(),
+        priceFormatter: (p: number) => `${de(p, digits)} ${sym}`.trim(),
       },
       handleScroll: true,
       handleScale: true,
@@ -188,7 +206,7 @@ export default function BigChart({
     chartRef.current = chart;
     seriesRef.current = [];
 
-    const priceFmt = { type: "price" as const, precision: 2, minMove: 0.01 };
+    const priceFmt = { type: "price" as const, precision: digits, minMove: 10 ** -digits };
     const useCandles = !!candles && candles.length > 1;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let mainSeries: ISeriesApi<any>;
@@ -308,9 +326,9 @@ export default function BigChart({
 
     return () => { ro.disconnect(); chart.remove(); chartRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVolume, mas.join(","), maType, indicators.join(","), currency, intraday, t, dataSig(data), candleSig(candles), themeTick]);
+  }, [showVolume, mas.join(","), maType, indicators.join(","), currency, intraday, digits, t, dataSig(data), candleSig(candles), themeTick]);
 
-  const m = (v?: number) => (v == null ? "—" : money(v, currency));
+  const m = (v?: number) => (v == null ? "—" : money(v, currency, digits));
   const cUp = legend && legend.o != null && legend.c != null ? legend.c >= legend.o : true;
 
   return (

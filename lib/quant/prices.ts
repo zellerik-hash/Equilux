@@ -15,6 +15,20 @@
 
 const cache = new Map<string, { at: number; data: number[] }>();
 const TTL_MS = 10 * 60 * 1000;
+/** Obergrenze des Kurs-Caches — ein Scan darf den Prozess nicht vollschreiben. */
+const CACHE_MAX = 300;
+
+/** Zeitbegrenzter Abruf: eine hängende Quelle darf die Route nicht blockieren. */
+async function get(url: string, timeoutMs = 12_000, headers?: Record<string, string>): Promise<Response> {
+  try {
+    return await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers });
+  } catch (e) {
+    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+      throw new Error(`Die Datenquelle antwortete nicht innerhalb von ${Math.round(timeoutMs / 1000)} Sekunden.`);
+    }
+    throw new Error("Die Datenquelle ist nicht erreichbar (Netz oder Sperre).");
+  }
+}
 
 /** Börsen-Suffixe, die Broker verwenden, aber unser Katalog anders schreibt. */
 const SUFFIX_FIX: Record<string, string> = {
@@ -120,6 +134,25 @@ export function eodhdError(status: number, sym: string, intraday: boolean): Erro
   return new Error(`EODHD antwortete mit ${status}.`);
 }
 
+/** Warum ein Ticker bei EODHD nicht abbildbar ist — mit brauchbarem Ausweg. */
+function unsupported(sym: string): Error {
+  const u = sym.toUpperCase();
+  if (u.endsWith("=F")) {
+    return new Error(
+      `Terminkontrakte wie ${u} führt EODHD nicht. Nimm ersatzweise einen ETF auf denselben ` +
+      "Basiswert (z. B. GLD für Gold, USO für Rohöl) oder den passenden Index.",
+    );
+  }
+  return new Error(`EODHD führt ${u} nicht — das Börsen-Suffix ist unbekannt.`);
+}
+
+/** Wie viele Kerzen zu einem Tagesfenster gehören (Tag/Woche/Monat). */
+function maxPoints(days: number, period: Period): number {
+  if (period === "w") return Math.ceil(days / 7) + 2;
+  if (period === "m") return Math.ceil(days / 30) + 2;
+  return days;
+}
+
 function requireKey(): string {
   const key = process.env.EODHD_API_KEY;
   if (!key) {
@@ -131,31 +164,53 @@ function requireKey(): string {
   return key;
 }
 
+/**
+ * Eine Kerze aus möglicherweise lückenhaften Rohwerten bauen.
+ *
+ * Anbieter liefern gelegentlich `null` für Eröffnung, Hoch oder Tief (dünn
+ * gehandelte Titel, Feiertagszeilen). Ohne diese Absicherung landet ein NaN im
+ * Chart, und die Zeichenbibliothek bricht die ganze Reihe ab. Zusätzlich wird
+ * die Konsistenz erzwungen: Hoch ist nie kleiner als Eröffnung/Schluss.
+ */
+function candle(t: number, o?: number, h?: number, l?: number, c = 0, v?: number): OHLC {
+  const open = Number.isFinite(o) ? (o as number) : c;
+  const hi = Number.isFinite(h) ? (h as number) : Math.max(open, c);
+  const lo = Number.isFinite(l) ? (l as number) : Math.min(open, c);
+  return {
+    t, o: open, c,
+    h: Math.max(hi, open, c),
+    l: Math.min(lo, open, c),
+    v: Number.isFinite(v) ? (v as number) : undefined,
+  };
+}
+
 /** Tages-, Wochen- oder Monatskerzen (`period` d/w/m). */
 async function eodhdDaily(sym: string, days: number, period: Period = "d"): Promise<Series> {
-  const key = requireKey();
   const t = toEodhd(sym);
-  if (!t) throw new Error(`EODHD führt ${sym} nicht.`);
+  if (!t) throw unsupported(sym);
+  const key = requireKey();
   const from = new Date(Date.now() - days * 1.7 * 86400_000).toISOString().slice(0, 10);
   const url = `https://eodhd.com/api/eod/${encodeURIComponent(t)}?api_token=${key}&fmt=json&period=${period}&from=${from}`;
-  const res = await fetch(url);
+  const res = await get(url);
   if (!res.ok) throw eodhdError(res.status, sym, false);
-  const rows = (await res.json()) as Array<{ date: string; open: number; high: number; low: number; close: number; volume?: number }>;
+  const rows = (await res.json()) as Array<{ date: string; open?: number; high?: number; low?: number; close: number; volume?: number }>;
   if (!Array.isArray(rows) || rows.length === 0) throw new Error(`EODHD hat keine Tageskurse für ${sym}.`);
   const out: OHLC[] = [];
   for (const r of rows) {
-    if (!Number.isFinite(r.close) || r.close <= 0) continue;
-    out.push({ t: Math.floor(new Date(`${r.date}T00:00:00Z`).getTime() / 1000), o: r.open, h: r.high, l: r.low, c: r.close, v: r.volume });
+    const ts = Date.parse(`${r.date}T00:00:00Z`);
+    if (!Number.isFinite(r.close) || r.close <= 0 || !Number.isFinite(ts)) continue;
+    out.push(candle(Math.floor(ts / 1000), r.open, r.high, r.low, r.close, r.volume));
   }
   if (out.length === 0) throw new Error(`EODHD lieferte keine verwertbaren Zeilen für ${sym}.`);
-  return { ohlc: out.slice(-days), currency: currencyFromSuffix(sym), source: "EODHD" };
+  out.sort((a, b) => a.t - b.t);
+  return { ohlc: out.slice(-maxPoints(days, period)), currency: currencyFromSuffix(sym), source: "EODHD" };
 }
 
 /** Intraday-Kerzen (1m/5m/1h). */
 async function eodhdIntraday(sym: string, interval: string, windowMs: number): Promise<Series> {
-  const key = requireKey();
   const t = toEodhd(sym);
-  if (!t) throw new Error(`EODHD führt ${sym} nicht.`);
+  if (!t) throw unsupported(sym);
+  const key = requireKey();
   const iv = EOD_INTERVAL[interval];
   if (!iv) {
     throw new Error(
@@ -165,14 +220,14 @@ async function eodhdIntraday(sym: string, interval: string, windowMs: number): P
   const to = Math.floor(Date.now() / 1000);
   const from = to - Math.floor(windowMs / 1000);
   const url = `https://eodhd.com/api/intraday/${encodeURIComponent(t)}?api_token=${key}&fmt=json&interval=${iv}&from=${from}&to=${to}`;
-  const res = await fetch(url);
+  const res = await get(url);
   if (!res.ok) throw eodhdError(res.status, sym, true);
-  const rows = (await res.json()) as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume?: number }>;
+  const rows = (await res.json()) as Array<{ timestamp: number; open?: number; high?: number; low?: number; close: number; volume?: number }>;
   if (!Array.isArray(rows) || rows.length === 0) throw new Error(`EODHD hat keine Intraday-Daten für ${sym}.`);
   const out: OHLC[] = [];
   for (const r of rows) {
     if (!Number.isFinite(r.close) || r.close <= 0 || !Number.isFinite(r.timestamp)) continue;
-    out.push({ t: Math.floor(r.timestamp), o: r.open, h: r.high, l: r.low, c: r.close, v: r.volume });
+    out.push(candle(Math.floor(r.timestamp), r.open, r.high, r.low, r.close, r.volume));
   }
   if (out.length === 0) throw new Error(`EODHD lieferte keine verwertbaren Intraday-Zeilen für ${sym}.`);
   out.sort((a, b) => a.t - b.t);
@@ -239,10 +294,12 @@ async function twelveIntraday(sym: string, interval: string): Promise<Series> {
   let json: TdBody | null = null;
   let lastNote = "";
   for (const venue of attempts) {
+    // `timezone=UTC` ist wichtig: sonst liefert Twelve Data die Zeitstempel in
+    // Börsenzeit, und der Chart verschiebt die Kerzen um Stunden.
     const url =
       `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(q.symbol)}${venue}` +
-      `&interval=${iv}&outputsize=${TD_OUTPUTSIZE[interval] ?? 400}&format=JSON&apikey=${key}`;
-    const res = await fetch(url);
+      `&interval=${iv}&outputsize=${TD_OUTPUTSIZE[interval] ?? 400}&timezone=UTC&format=JSON&apikey=${key}`;
+    const res = await get(url);
     if (res.status === 429) throw new Error("Twelve-Data-Limit erreicht (429) — gleich noch mal versuchen.");
     if (res.status === 401) throw new Error("Twelve Data lehnt den Schlüssel ab (401) — TWELVEDATA_API_KEY prüfen.");
     if (res.ok) {
@@ -265,15 +322,14 @@ async function twelveIntraday(sym: string, interval: string): Promise<Series> {
   }
   const values = json.values ?? [];
   const out: OHLC[] = [];
-  for (const r of [...values].reverse()) {                  // Twelve liefert neueste zuerst
-    const o = +r.open, h = +r.high, l = +r.low, c = +r.close;
-    if (!Number.isFinite(c) || c <= 0) continue;
-    out.push({
-      t: Math.floor(new Date(r.datetime.replace(" ", "T") + "Z").getTime() / 1000),
-      o, h, l, c, v: r.volume ? +r.volume : undefined,
-    });
+  for (const r of values) {                                 // Reihenfolge egal, wird sortiert
+    const c = +r.close;
+    const ts = Date.parse(r.datetime.replace(" ", "T") + "Z");
+    if (!Number.isFinite(c) || c <= 0 || !Number.isFinite(ts)) continue;
+    out.push(candle(Math.floor(ts / 1000), +r.open, +r.high, +r.low, c, r.volume ? +r.volume : undefined));
   }
   if (out.length === 0) throw new Error(`Twelve Data lieferte keine verwertbaren Zeilen für ${sym}.`);
+  out.sort((a, b) => a.t - b.t);                            // Twelve liefert neueste zuerst
   return { ohlc: out, currency: json.meta?.currency || currencyFromSuffix(sym), source: "Twelve Data" };
 }
 
@@ -333,6 +389,11 @@ export async function closes(symbol: string, days = 750): Promise<number[]> {
   const ohlc = await candles(sym, days);
   const data = ohlc.map((k) => k.c).filter((v) => v > 0).slice(-days);
 
+  // Ältesten Eintrag verdrängen, statt den Cache unbegrenzt wachsen zu lassen.
+  if (cache.size >= CACHE_MAX) {
+    const oldest = cache.keys().next();
+    if (!oldest.done) cache.delete(oldest.value);
+  }
   cache.set(key, { at: Date.now(), data });
   return data;
 }

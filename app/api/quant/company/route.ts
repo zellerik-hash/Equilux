@@ -40,8 +40,17 @@ function flattenHolders(raw: unknown, kind: Holder["kind"]): Holder[] {
   return out.sort((a, b) => (b.share ?? 0) - (a.share ?? 0)).slice(0, 10);
 }
 
+/** Abruf mit Zeitlimit — sonst hängt die ganze Route an einer trägen Quelle. */
+async function get(url: string, timeoutMs = 12_000): Promise<Response> {
+  try {
+    return await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  } catch {
+    throw new Error("Die Datenquelle antwortete nicht rechtzeitig.");
+  }
+}
+
 async function loadNews(t: string, key: string): Promise<{ items: NewsItem[]; note?: string }> {
-  const res = await fetch(
+  const res = await get(
     `https://eodhd.com/api/news?s=${encodeURIComponent(t)}&limit=12&api_token=${key}&fmt=json`,
   );
   if (res.status === 402 || res.status === 403) {
@@ -57,7 +66,7 @@ async function loadNews(t: string, key: string): Promise<{ items: NewsItem[]; no
 }
 
 async function loadHolders(t: string, key: string): Promise<{ items: Holder[]; name?: string; note?: string }> {
-  const res = await fetch(`https://eodhd.com/api/fundamentals/${encodeURIComponent(t)}?api_token=${key}&fmt=json`);
+  const res = await get(`https://eodhd.com/api/fundamentals/${encodeURIComponent(t)}?api_token=${key}&fmt=json`);
   if (res.status === 402 || res.status === 403) {
     return { items: [], note: "Fundamentaldaten sind in deinem EODHD-Tarif nicht enthalten." };
   }
@@ -65,10 +74,18 @@ async function loadHolders(t: string, key: string): Promise<{ items: Holder[]; n
   const f = (await res.json()) as Record<string, unknown>;
   const general = f.General as Record<string, unknown> | undefined;
   const holders = f.Holders as Record<string, unknown> | undefined;
-  const items = [
+  // Institutionen und Fonds überschneiden sich (Vanguard steht in beiden Listen) —
+  // je Name bleibt der größere Anteil stehen, sonst doppeln sich die Knoten im Netz.
+  const seen = new Map<string, Holder>();
+  for (const h of [
     ...flattenHolders(holders?.Institutions, "institution"),
     ...flattenHolders(holders?.Funds, "fonds"),
-  ].sort((a, b) => (b.share ?? 0) - (a.share ?? 0)).slice(0, 12);
+  ]) {
+    const k = h.name.toLowerCase();
+    const prev = seen.get(k);
+    if (!prev || (h.share ?? 0) > (prev.share ?? 0)) seen.set(k, h);
+  }
+  const items = [...seen.values()].sort((a, b) => (b.share ?? 0) - (a.share ?? 0)).slice(0, 12);
   return {
     items,
     name: typeof general?.Name === "string" ? general.Name : undefined,

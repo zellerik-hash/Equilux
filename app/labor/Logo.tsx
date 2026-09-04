@@ -5,10 +5,15 @@ import s from "./widgets.module.css";
 import { metaFor } from "./symbols";
 
 /**
- * Firmenlogo mit Monogramm als Basis. Das echte Logo (Clearbit über die
- * Domain) legt sich nur darüber, wenn es erfolgreich lädt — schlägt der Abruf
- * fehl oder gibt es keine Domain, bleibt das saubere farbige Kürzel stehen.
- * So erscheint nie ein kaputtes Bild.
+ * Firmenlogo mit Monogramm als Basis. Das echte Logo legt sich nur darüber,
+ * wenn es lädt — schlägt der Abruf fehl oder gibt es keine Domain, bleibt das
+ * farbige Kürzel stehen. So erscheint nie ein kaputtes Bild.
+ *
+ * Zwei Quellen nacheinander, weil keine davon verlässlich ist: Clearbits freie
+ * Logo-API wurde eingestellt, der Favicon-Dienst von DuckDuckGo liefert dafür
+ * kleinere, aber fast überall vorhandene Symbole. Beide brauchen keinen
+ * Schlüssel — an sie geht allerdings die IP des Betrachters, deshalb steht das
+ * im Impressum unter „Datenschutz".
  */
 function hue(sym: string): number {
   let h = 0;
@@ -16,12 +21,19 @@ function hue(sym: string): number {
   return h;
 }
 
+const sources = (domain: string) => [
+  `https://logo.clearbit.com/${domain}`,
+  `https://icons.duckduckgo.com/ip3/${domain}.ico`,
+];
+
 export default function Logo({ symbol }: { symbol: string }) {
   const [loaded, setLoaded] = useState(false);
+  const [srcIdx, setSrcIdx] = useState(0);
   const sym = symbol.trim().toUpperCase();
   const meta = metaFor(sym);
   const letters = sym.replace(/[.\-].*$/, "").slice(0, 2) || sym.slice(0, 2);
   const h = hue(sym);
+  const urls = meta.domain ? sources(meta.domain) : [];
 
   return (
     <span className={s.logo}>
@@ -31,15 +43,17 @@ export default function Logo({ symbol }: { symbol: string }) {
       >
         {letters}
       </span>
-      {meta.domain && (
+      {urls[srcIdx] && (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
-          src={`https://logo.clearbit.com/${meta.domain}`}
+          key={urls[srcIdx]}
+          src={urls[srcIdx]}
           alt=""
           className={`${s.logoImg} ${loaded ? s.logoImgOn : ""}`}
           loading="lazy"
           referrerPolicy="no-referrer"
           onLoad={() => setLoaded(true)}
+          onError={() => setSrcIdx((i) => i + 1)}
         />
       )}
     </span>

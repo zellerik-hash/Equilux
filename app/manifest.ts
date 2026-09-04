@@ -11,8 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Quantitatives Aktien-Terminal: Charts, Derivate, Bewertung, Stat-Arb, Marktbrief.",
     start_url: "/labor",
     display: "standalone",
-    background_color: "#0c0e13",
-    theme_color: "#0c0e13",
+    background_color: "#06070c",
+    theme_color: "#06070c",
     orientation: "any",
     icons: [
       { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

@@ -63,6 +63,7 @@ export default function Labor() {
       <header className={s.topbar}>
         <Link href="/" className={s.brandMark}>EQUILUX</Link>
         <Link href="/" className={s.backLink}>← Übersicht</Link>
+        <Link href="/impressum" className={s.legalLink} title="Impressum, Risikohinweis, Datenschutz">Impressum</Link>
         <div className={s.topRight}>
           <SessionClock />
           <ModeToggle />

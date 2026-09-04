@@ -187,6 +187,13 @@
   color: var(--text-faint);
   font: 400 12px/1.6 var(--font-mono-stack);
 }
+.footLink {
+  color: var(--text-dim);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-strong);
+  transition: color 0.16s var(--ease-out), border-color 0.16s var(--ease-out);
+}
+.footLink:hover { color: var(--text); border-color: var(--accent); }
 
 @media (max-width: 760px) {
   .hero { padding: 60px 0 44px; }

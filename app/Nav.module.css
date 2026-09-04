@@ -38,3 +38,13 @@
   .link:hover { color: var(--text); background: var(--surface-2); }
 }
 .link:active { transform: scale(0.97); }
+
+/* Pflichtangabe, aber kein Ziel der Seite — deshalb zurückhaltend. */
+.linkQuiet {
+  font: 400 12px/1 var(--font-mono-stack);
+  color: var(--text-faint);
+  text-decoration: none;
+  padding: 8px 6px;
+  transition: color 0.16s var(--ease-out);
+}
+.linkQuiet:hover { color: var(--text); }

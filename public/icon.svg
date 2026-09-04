@@ -1,6 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0c0e13"/>
-  <text x="50%" y="50%" dy="0.02em" text-anchor="middle" dominant-baseline="central"
-        font-family="DM Mono, ui-monospace, monospace" font-size="300" font-weight="500"
-        letter-spacing="8" fill="#d9b25f">E</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EQUILUX">
+  <defs>
+    <linearGradient id="eqGround" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#141926"/>
+      <stop offset="1" stop-color="#06070c"/>
+    </linearGradient>
+    <linearGradient id="eqMark" x1="0.12" y1="0.05" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#a9c0ff"/>
+      <stop offset="0.5" stop-color="#6b8bff"/>
+      <stop offset="1" stop-color="#3f5fd8"/>
+    </linearGradient>
+    <!-- Sechseck-Ring mit Querbalken und Mund unten rechts = kleines „e". -->
+    <mask id="eqCut">
+      <path d="M406 256 331 385.9 181 385.9 106 256 181 126.1 331 126.1Z" fill="#fff"/>
+      <path d="M344 256 300 332.2 212 332.2 168 256 212 179.8 300 179.8Z" fill="#000"/>
+      <rect x="168" y="238" width="176" height="36" fill="#fff"/>
+      <path d="M333.6 274 L430 274 L430 470 L228 470 Z" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#eqGround)"/>
+  <rect width="512" height="512" fill="url(#eqMark)" mask="url(#eqCut)"/>
 </svg>

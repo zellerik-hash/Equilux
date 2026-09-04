@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0c0e13",
+  themeColor: "#06070c",
   width: "device-width",
   initialScale: 1,
   // Randlos bis in die Ecken; die sicheren Bereiche fängt das CSS über env() ab.

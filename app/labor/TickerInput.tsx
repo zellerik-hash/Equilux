@@ -36,6 +36,9 @@ export default function TickerInput({
     setPos({ top: r.bottom + 5, left: r.left, width: r.width });
   }, []);
 
+  // Offenen Blur-Timer beim Aushängen abräumen — sonst setzt er State im Nichts.
+  useEffect(() => () => { if (blurT.current) clearTimeout(blurT.current); }, []);
+
   useEffect(() => {
     if (!open) return;
     place();

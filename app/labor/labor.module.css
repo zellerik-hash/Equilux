@@ -36,6 +36,9 @@
 .brandMark { font: 500 14px/1 var(--mono); letter-spacing: 0.24em; color: var(--gold); }
 .backLink { font: 400 11px/1 var(--mono); letter-spacing: 0.05em; color: var(--faint); margin-left: 2px; transition: color 0.16s var(--ease-out); }
 .backLink:hover { color: var(--ink); }
+/* Pflichtangabe — muss von jeder Seite aus erreichbar sein, auch aus der Shell. */
+.legalLink { font: 400 11px/1 var(--mono); letter-spacing: 0.05em; color: var(--faint); margin-left: 14px; text-decoration: none; transition: color 0.16s var(--ease-out); }
+.legalLink:hover { color: var(--ink); }
 .topRight { margin-left: auto; display: flex; align-items: center; gap: 16px; }
 
 /* Live-Session-Anzeige */

@@ -100,8 +100,8 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
               title="Anteilseigner"
               color="var(--accent)"
               note={data.notes.holders}
-              rows={data.holders.map((h) => ({
-                key: h.name,
+              rows={data.holders.map((h, i) => ({
+                key: `${h.name}#${i}`,
                 main: h.name,
                 sub: `${h.kind === "fonds" ? "Fonds" : "Institution"}${h.share != null ? ` · ${pctPlain(h.share, 2)}` : ""}`,
               }))}
@@ -110,7 +110,7 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
               title="Lieferanten"
               color="var(--gold)"
               note={data.notes.relations}
-              rows={data.suppliers.map((x) => ({ key: x.name, main: x.name, sub: x.context.slice(0, 120) + " …" }))}
+              rows={data.suppliers.map((x, i) => ({ key: `${x.name}#${i}`, main: x.name, sub: x.context.slice(0, 120) + " …" }))}
             />
             <Column
               title="Kunden"

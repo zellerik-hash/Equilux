@@ -52,7 +52,10 @@ app/
   layout.tsx, globals.css, Nav.tsx      Rahmen, Fonts, persistente Kopfzeile
   page.tsx, home.module.css             Startseite
   labor/                                Rechenlabor: Labor.tsx + panels/*
-  api/quant/                            derivate, valuation, statarb, scan, sotp, edgar, brief
+  unternehmen/[symbol]/                 Unternehmensseite: Mindmap + News
+  impressum/                            Impressum, Haftung, Risikohinweis, Datenschutz
+  api/quant/                            derivate, valuation, statarb, scan, sotp, edgar,
+                                        brief, series, company, fundamentals, instrument
 lib/quant/                              Rechenkerne (siehe README)
 types/quant.ts                          geteilte Typen
 tests/reference.test.ts                 43 Referenztests (npm test)
@@ -77,6 +80,17 @@ EODHD und SEC EDGAR können in gesperrten Umgebungen blockiert sein
 (kein Live-Abruf). Der Code ist trotzdem korrekt; Derivate/Bewertung/SOTP
 funktionieren immer, weil sie client-seitig rechnen. Kein API-Schlüssel darf je
 im Client landen.
+
+## Rechtliches im Produkt
+
+`/impressum` ist eine **Vorlage**: alles Personenbezogene (Name, Anschrift,
+Kontakt, Register, Hosting-Anbieter, Aufsichtsbehörde) steht als markierter
+Platzhalter (`<P>`) da und muss vor einer echten Veröffentlichung ersetzt
+werden. Haftung, Risikohinweis, Datenquellen und Datenschutz sind bereits auf
+EQUILUX zugeschnitten — wer dort etwas an der Technik ändert (neue Datenquelle,
+Drittabruf aus dem Browser, Tracking), muss den Abschnitt mitziehen.
+Die Seite muss von überall erreichbar bleiben: `Nav.tsx`, Startseiten-Fußzeile
+und Labor-Kopfzeile verlinken sie.
 
 ## Grenzen / keine Anlageberatung
 

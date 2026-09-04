@@ -15,7 +15,28 @@
  */
 
 const SEC_UA = process.env.SEC_USER_AGENT ?? "EQUILUX research tool (kontakt@example.com)";
-const HEADERS = { "User-Agent": SEC_UA, Accept: "application/json" };
+
+/** Ein 10-K kann zweistellige Megabyte haben — so viel Text reicht für die Muster. */
+const MAX_FILING_CHARS = 4_000_000;
+
+/** Börsen-Suffixe, die eine Nicht-US-Notierung kennzeichnen (BRK.B ist keines). */
+const NON_US_SUFFIX =
+  /\.(DE|L|PA|AS|MI|MC|SW|BR|LS|VI|ST|HE|CO|OL|TO|V|HK|T|AX|IR|F|SA|NS|BO|KS|TW|SI|NZ)$/i;
+
+/** Abruf mit Zeitlimit — die SEC antwortet gelegentlich gar nicht. */
+async function secFetch(url: string, accept = "application/json"): Promise<Response> {
+  try {
+    return await fetch(url, {
+      headers: { "User-Agent": SEC_UA, Accept: accept },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (e) {
+    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+      throw new Error("Die SEC antwortete nicht innerhalb von 15 Sekunden.");
+    }
+    throw new Error("Die SEC ist von hier aus nicht erreichbar (Netz oder Sperre).");
+  }
+}
 
 export interface CustomerMention {
   /** Kundenname, oder null bei anonymer Nennung. */
@@ -46,7 +67,13 @@ let cikLoadError: string | null = null;
 /** Ticker auf CIK abbilden. Die Liste wird einmal je Prozess geladen. */
 export async function resolveCik(ticker: string): Promise<string | null> {
   if (!cikCache) {
-    const res = await fetch("https://www.sec.gov/files/company_tickers.json", { headers: HEADERS });
+    let res: Response;
+    try {
+      res = await secFetch("https://www.sec.gov/files/company_tickers.json");
+    } catch (e) {
+      cikLoadError = e instanceof Error ? e.message : "Die SEC-Ticker-Liste ist nicht abrufbar.";
+      return null;
+    }
     if (!res.ok) {
       cikLoadError = res.status === 403
         ? "Die SEC blockt die Anfrage (403). Sie verlangt einen User-Agent mit echter Kontaktadresse — " +
@@ -54,12 +81,17 @@ export async function resolveCik(ticker: string): Promise<string | null> {
         : `Die SEC-Ticker-Liste ist nicht abrufbar (${res.status}).`;
       return null;
     }
-    cikLoadError = null;
     const raw = (await res.json()) as Record<string, { cik_str: number; ticker: string }>;
-    cikCache = {};
+    const next: Record<string, string> = {};
     for (const v of Object.values(raw)) {
-      cikCache[v.ticker.toUpperCase()] = String(v.cik_str).padStart(10, "0");
+      if (v && typeof v.ticker === "string") next[v.ticker.toUpperCase()] = String(v.cik_str).padStart(10, "0");
     }
+    if (Object.keys(next).length === 0) {
+      cikLoadError = "Die SEC-Ticker-Liste kam leer zurück.";
+      return null;
+    }
+    cikLoadError = null;
+    cikCache = next;
   }
   return cikCache[ticker.toUpperCase()] ?? null;
 }
@@ -202,14 +234,18 @@ async function loadFiling(ticker: string): Promise<FilingLoad> {
   const miss = (note: string, cik: string | null = null, url: string | null = null): FilingLoad =>
     ({ ok: false, cik, form: null, filed: null, url, text: "", note });
 
-  if (/\.[A-Z]{2,3}$/i.test(ticker)) {
-    return miss("Nur für US-notierte Werte verfügbar — die SEC führt keine Filings für dieses Kürzel.");
+  // Nur Börsen-Suffixe aussortieren — Klassen-Ticker wie BRK.B sind US-Werte.
+  if (NON_US_SUFFIX.test(ticker) || ticker.startsWith("^") || /[=\-]/.test(ticker)) {
+    return miss(
+      "Nur für US-notierte Werte verfügbar — die SEC führt keine Filings für dieses Kürzel. " +
+      "Bei einer europäischen Notierung hilft oft die US-Zweitnotierung (ADR), etwa SAP statt SAP.DE.",
+    );
   }
 
   const cik = await resolveCik(ticker);
   if (!cik) return miss(cikLoadError ?? `Die SEC führt kein Unternehmen unter dem Kürzel ${ticker.toUpperCase()}.`);
 
-  const subRes = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, { headers: HEADERS });
+  const subRes = await secFetch(`https://data.sec.gov/submissions/CIK${cik}.json`);
   if (!subRes.ok) return miss(`SEC antwortet mit ${subRes.status}.`, cik);
 
   const sub = (await subRes.json()) as {
@@ -223,12 +259,14 @@ async function loadFiling(ticker: string): Promise<FilingLoad> {
 
   const acc = (rec.accessionNumber?.[idx] ?? "").replace(/-/g, "");
   const doc = rec.primaryDocument?.[idx] ?? "";
+  if (!acc || !doc) return miss("Zu dieser Einreichung fehlt das Hauptdokument.", cik);
   const url = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${acc}/${doc}`;
 
-  const docRes = await fetch(url, { headers: { "User-Agent": SEC_UA } });
+  const docRes = await secFetch(url, "text/html");
   if (!docRes.ok) return miss(`Filing nicht abrufbar (${docRes.status}).`, cik, url);
 
-  const html = await docRes.text();
+  // Ein 10-K sind schnell 20 MB; alles darüber bringt für die Muster nichts mehr.
+  const html = (await docRes.text()).slice(0, MAX_FILING_CHARS);
   return {
     ok: true, cik, url,
     form: rec.form[idx], filed: rec.filingDate?.[idx] ?? null,

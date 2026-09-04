@@ -29,7 +29,8 @@ export default function BackupMenu() {
       a.href = url;
       a.download = `equilux-einstellungen-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
+      // Erst freigeben, wenn der Browser den Download tatsächlich angestoßen hat.
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch { /* egal */ }
     setOpen(false);
   };

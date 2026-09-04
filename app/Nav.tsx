@@ -16,6 +16,7 @@ export default function Nav() {
       <Link href="/" className={s.brand}>EQUILUX</Link>
       <div className={s.right}>
         <ModeToggle />
+        <Link href="/impressum" className={s.linkQuiet}>Impressum</Link>
         <Link href="/labor" className={s.link}>Terminal öffnen</Link>
         <ThemeToggle />
       </div>

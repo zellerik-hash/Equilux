@@ -97,6 +97,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
   const [watch, setWatch] = useState<string[]>([]);
   const [solo, setSolo] = useState<string | null>(null);
   const [fs, setFs] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
   const inflight = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -148,14 +149,11 @@ export default function ChartView({ focus }: { focus: string | null }) {
   };
 
   useEffect(() => {
-    if (!focus) return;
-    setSlots((sl) => {
-      if (sl[active] === focus) return sl;
-      const next = [...sl];
-      next[active] = focus;
-      persist(layout, next, tf);
-      return next;
-    });
+    if (!focus || slots[active] === focus) return;
+    const next = [...slots];
+    next[active] = focus;
+    setSlots(next);
+    persist(layout, next, tf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus]);
 
@@ -163,13 +161,16 @@ export default function ChartView({ focus }: { focus: string | null }) {
 
   // Was aktuell sichtbar ist (Solo überschreibt das Raster), damit genau das geladen wird.
   const visible = solo ? [solo] : slots.slice(0, layout);
+  // Absichtlich ohne `cache` in den Abhängigkeiten: der Effekt schreibt selbst in
+  // den Cache, stünde er drin, liefe er nach jeder Antwort erneut. Was schon
+  // geladen oder unterwegs ist, merkt sich `done`/`inflight`.
+  const done = useRef<Set<string>>(new Set());
   useEffect(() => {
     const def = tfById(tf);
     visible.forEach((sym) => {
       if (!sym) return;
       const k = keyOf(sym);
-      const cur = cache[k];
-      if (cur?.closes || cur?.demo || cur?.error || inflight.current.has(k)) return;
+      if (done.current.has(k) || inflight.current.has(k)) return;
       inflight.current.add(k);
       setCache((c) => ({ ...c, [k]: { loading: true } }));
       const qs = def.intraday
@@ -184,10 +185,10 @@ export default function ChartView({ focus }: { focus: string | null }) {
             : { error: j.error || "Abruf fehlgeschlagen" },
         })))
         .catch(() => setCache((c) => ({ ...c, [k]: { error: "Keine Verbindung" } })))
-        .finally(() => inflight.current.delete(k));
+        .finally(() => { inflight.current.delete(k); done.current.add(k); });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible.join("|"), tf, cache]);
+  }, [visible.join("|"), tf, reloadTick]);
 
   const setSlot = (i: number, sym: string) => {
     const next = [...slots];
@@ -202,6 +203,17 @@ export default function ChartView({ focus }: { focus: string | null }) {
     const cl = demoCloses(sym, def.points);
     const vol = cl.map((_, i) => Math.round(400 + Math.abs(Math.sin(i * 1.3) * 600) + (i % 7) * 90));
     setCache((c) => ({ ...c, [keyOf(sym)]: { demo: true, closes: cl, ohlc: toOhlc(cl), t: demoTimes(cl.length, def.stepSec), volumes: vol, currency: guessCurrency(sym), intraday: def.intraday } }));
+  };
+  /** Sichtbare Kurse neu ziehen — Kurse altern, die Seite lädt aber nicht neu. */
+  const refresh = () => {
+    const keys = visible.filter(Boolean).map(keyOf);
+    keys.forEach((k) => done.current.delete(k));
+    setCache((c) => {
+      const next = { ...c };
+      keys.forEach((k) => delete next[k]);
+      return next;
+    });
+    setReloadTick((x) => x + 1);
   };
   // Rechtsklick in der Einzelansicht: zweiten Chart aufmachen und belegen lassen.
   const onSlotContext = (i: number, e: React.MouseEvent) => {
@@ -370,6 +382,7 @@ export default function ChartView({ focus }: { focus: string | null }) {
               title={`Eine Kerze = ${t.label}`}>{t.label}</button>
           ))}
         </div>
+        <button className={`${s.swBtn} ${s.fsBtn}`} onClick={refresh} title="Kurse neu laden" aria-label="Kurse neu laden">↻</button>
         <button className={`${s.swBtn} ${s.fsBtn} ${fs ? s.swOn : ""}`} onClick={() => setFs((v) => !v)} title="Vollbild (Esc zum Verlassen)" aria-label="Vollbild">
           {fs ? "⤢ Verlassen" : "⤢ Vollbild"}
         </button>
