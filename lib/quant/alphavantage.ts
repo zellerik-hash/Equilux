@@ -59,7 +59,7 @@ export function toAlphaVantage(symbol: string): string | null {
 }
 
 /** Rohantwort auf die Felder abbilden, die EQUILUX braucht. */
-function parse(raw: Record<string, unknown>): AvOverview | null {
+export function parseOverview(raw: Record<string, unknown>): AvOverview | null {
   if (!raw || typeof raw.Symbol !== "string") return null;
   const ratings: AvRatings = {
     strongBuy: count(raw.AnalystRatingStrongBuy),
@@ -121,7 +121,7 @@ export async function avOverview(symbol: string): Promise<{ data: AvOverview | n
           ? "Alpha-Vantage-Tageskontingent erschöpft (freier Tarif: rund 25 Abrufe). Morgen wieder verfügbar."
           : info.slice(0, 200);
       } else {
-        data = parse(raw);
+        data = parseOverview(raw);
         if (!data) note = "Alpha Vantage kennt dieses Kürzel nicht.";
       }
     }

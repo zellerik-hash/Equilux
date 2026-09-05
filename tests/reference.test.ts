@@ -17,6 +17,7 @@ import {
 import { valuation, type ValuationInput } from "@/lib/quant/valuation";
 import { rsi, atr, sma, risk, type Candle } from "@/lib/quant/indicators";
 import { extractOwnership } from "@/lib/quant/edgar";
+import { parseOverview, toAlphaVantage } from "@/lib/quant/alphavantage";
 
 // ── Mini-Harness ─────────────────────────────────────────────────────────────
 let passed = 0;
@@ -283,6 +284,45 @@ section("SEC 13D/G — Name und Anteil aus dem Deckblatt");
     "NAME OF REPORTING PERSON  Acme Capital LLC   PERCENT OF CLASS REPRESENTED BY AMOUNT IN ROW (11) 420%",
   );
   ok("Anteil über 100 % wird verworfen", wild.share === null, String(wild.share));
+}
+
+// ── 13. Alpha Vantage — Analystenblock lesen ─────────────────────────────────
+section("Alpha Vantage OVERVIEW — Kursziel und Urteile");
+{
+  // Alpha Vantage liefert jedes Feld als Zeichenkette, auch die Zählungen.
+  const raw = {
+    Symbol: "AAPL", Name: "Apple Inc", Currency: "USD",
+    AnalystTargetPrice: "245.02",
+    AnalystRatingStrongBuy: "12", AnalystRatingBuy: "20",
+    AnalystRatingHold: "8", AnalystRatingSell: "1", AnalystRatingStrongSell: "0",
+    EPS: "6.58", BookValue: "4.44", DividendPerShare: "0.99", Beta: "1.21",
+  };
+  const o = parseOverview(raw)!;
+  near("Kursziel 245,02", o.target ?? -1, 245.02, 1e-9);
+  ok("Urteile gelesen", o.ratings?.strongBuy === 12 && o.ratings?.sell === 1, JSON.stringify(o.ratings));
+  near("EPS für die Bewertung", o.eps ?? -1, 6.58, 1e-9);
+
+  // Fehlende Werte schreibt Alpha Vantage als "None" oder "-", nicht als null.
+  const luecken = parseOverview({ ...raw, AnalystTargetPrice: "None", Beta: "-", EPS: "" })!;
+  ok("\"None\" wird nicht zu einer Zahl", luecken.target === undefined, String(luecken.target));
+  ok("\"-\" wird nicht zu einer Zahl", luecken.beta === undefined, String(luecken.beta));
+  ok("Leerer Wert wird nicht zu 0", luecken.eps === undefined, String(luecken.eps));
+
+  // Ohne eine einzige Nennung gibt es keine Verteilung zu zeigen.
+  const ohne = parseOverview({
+    Symbol: "XYZ", AnalystRatingStrongBuy: "0", AnalystRatingBuy: "0",
+    AnalystRatingHold: "0", AnalystRatingSell: "0", AnalystRatingStrongSell: "0",
+  })!;
+  ok("Keine Urteile → keine Verteilung", ohne.ratings === undefined, JSON.stringify(ohne.ratings));
+
+  // Unbekanntes Kürzel: Alpha Vantage antwortet mit einem leeren Objekt.
+  ok("Leere Antwort ergibt nichts", parseOverview({}) === null);
+
+  // Nicht-US-Kürzel gar nicht erst anfragen — jeder Fehlversuch kostet Kontingent.
+  ok("US-Kürzel wird angefragt", toAlphaVantage("AAPL") === "AAPL");
+  ok("Xetra-Kürzel wird nicht angefragt", toAlphaVantage("SAP.DE") === null);
+  ok("Index wird nicht angefragt", toAlphaVantage("^GDAXI") === null);
+  ok("Krypto wird nicht angefragt", toAlphaVantage("BTC-USD") === null);
 }
 
 // ── Ergebnis ─────────────────────────────────────────────────────────────────

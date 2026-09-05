@@ -28,9 +28,8 @@ interface Dossier {
   customers: Customer[];
   suppliers: Supplier[];
   holderSource: "EODHD" | "SEC" | null;
-  analysts: Analysts | null;
   filing: { form: string | null; filed: string | null; url: string | null } | null;
-  notes: { news?: string; holders?: string; relations?: string; analysts?: string };
+  notes: { news?: string; holders?: string; relations?: string };
 }
 
 const HOLDER_KIND: Record<Holder["kind"], string> = {
@@ -55,6 +54,11 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
   const [data, setData] = useState<Dossier | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Eigener Abruf, absichtlich erst beim Öffnen des Reiters: das Tageskontingent
+  // der freien Analystenquelle ist knapp und soll nicht bei jedem Seitenaufruf
+  // verbraucht werden.
+  const [ana, setAna] = useState<{ data: Analysts | null; note?: string } | null>(null);
+  const [anaBusy, setAnaBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -66,6 +70,20 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
       .finally(() => { if (alive) setBusy(false); });
     return () => { alive = false; };
   }, [symbol]);
+
+  useEffect(() => { setAna(null); }, [symbol]);
+
+  useEffect(() => {
+    if (tab !== "analysten" || ana || anaBusy) return;
+    let alive = true;
+    setAnaBusy(true);
+    fetch(`/api/quant/analysts?symbol=${encodeURIComponent(symbol)}`)
+      .then((r) => r.json())
+      .then((j) => { if (alive) setAna({ data: j.analysts ?? null, note: j.note }); })
+      .catch(() => { if (alive) setAna({ data: null, note: "Keine Verbindung zur Analystenquelle." }); })
+      .finally(() => { if (alive) setAnaBusy(false); });
+    return () => { alive = false; };
+  }, [tab, symbol, ana, anaBusy]);
 
   const meta = metaFor(symbol);
   const company = data?.name || meta.name || symbol;
@@ -172,7 +190,11 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
           ))}
         </div>
       )}
-      {data && tab === "analysten" && <AnalystView a={data.analysts} note={data.notes.analysts} />}
+      {tab === "analysten" && (
+        anaBusy || !ana
+          ? <p className={s.state}>lädt Analystenurteile …</p>
+          : <AnalystView a={ana.data} note={ana.note} />
+      )}
     </section>
   );
 }

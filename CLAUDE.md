@@ -107,8 +107,14 @@ und wenn beides ausfällt, ein Satz der sagt **warum** — nie eine stille Lück
 
 Alpha Vantage meldet Kontingent- und Fehlerfälle mit **Status 200** und einem
 Hinweistext (`Note` / `Information`) — der Statuscode allein genügt nicht.
-Freier Tarif: rund 25 Abrufe am Tag, deshalb zwölf Stunden Zwischenspeicher,
-auch für Fehlversuche.
+Fehlende Werte stehen dort als `"None"`, `"-"` oder `""`, nie als `null`.
+
+Das Tageskontingent (rund 25 Abrufe) prägt die Architektur: `/api/quant/analysts`
+ist **eine eigene Route**, die der Reiter erst beim Öffnen abruft — läge der
+Block im Unternehmens-Dossier, verbrauchte jeder Seitenaufruf eines. Dazu zwölf
+Stunden Zwischenspeicher, auch für Fehlversuche, und Nicht-US-Kürzel werden gar
+nicht erst angefragt. Der Zwischenspeicher lebt im Prozess, überlebt auf Vercel
+also keinen Kaltstart — er dämpft, er garantiert nichts.
 
 ## Grenzen / keine Anlageberatung
 
