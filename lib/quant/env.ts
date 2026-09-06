@@ -34,6 +34,21 @@ export function env(name: string): string | undefined {
   return out;
 }
 
+/**
+ * Erster gesetzter Name aus einer Liste gleichwertiger Schreibweisen.
+ *
+ * Manche Schlüssel haben historisch zwei Namen — dann soll beides gelten,
+ * statt dass eine Umbenennung in der Oberfläche zur Voraussetzung wird. Die
+ * Reihenfolge ist die Vorrangfolge.
+ */
+export function envAny(names: string[]): string | undefined {
+  for (const n of names) {
+    const v = env(n);
+    if (v) return v;
+  }
+  return undefined;
+}
+
 /** Nur für Tests: den Zwischenspeicher leeren. */
 export function resetEnvCache(): void {
   resolved.clear();
@@ -54,8 +69,12 @@ export function similarEnvNames(name: string): string[] {
     const k = key.toLowerCase();
     if (k === wanted) continue;                       // exakt getroffen, kein Vertipper
     if (!k.startsWith(stem)) continue;
-    // Einer muss Anfang des anderen sein — sonst ist es eine eigene Variable.
-    if (k.startsWith(wanted) || wanted.startsWith(k)) out.push(key);
+    // Zwei Muster gelten als Vertipper: einer ist Anfang des anderen
+    // (SEC_USER ↔ SEC_USER_AGENT), oder die Namen unterscheiden sich nur in
+    // den Unterstrichen (SECUSER ↔ SEC_USER). Alles andere ist eine eigene
+    // Variable und wird nicht gemeldet.
+    const nackt = (x: string) => x.replace(/_/g, "");
+    if (k.startsWith(wanted) || wanted.startsWith(k) || nackt(k) === nackt(wanted)) out.push(key);
   }
   return out.slice(0, 3);
 }
@@ -64,9 +83,19 @@ export function similarEnvNames(name: string): string[] {
  * Fehlt eine Variable, diesen Satz anhängen: er nennt den erwarteten Namen und,
  * falls vorhanden, den ähnlich benannten, der tatsächlich gesetzt ist.
  */
-export function missingEnvHint(name: string): string {
-  const near = similarEnvNames(name);
-  if (near.length === 0) return `${name} ist nicht gesetzt.`;
-  return `${name} ist nicht gesetzt — gesetzt ist stattdessen ${near.join(", ")}. ` +
-    `Namen von Umgebungsvariablen sind groß-/kleinschreibungssensitiv und müssen exakt ${name} heißen.`;
+export function missingEnvHint(name: string | string[]): string {
+  const names = Array.isArray(name) ? name : [name];
+  const primary = names[0];
+  const label = names.length > 1 ? `${primary} (oder ${names.slice(1).join(", ")})` : primary;
+
+  // Nur Namen melden, die keiner der akzeptierten Schreibweisen entsprechen.
+  const akzeptiert = new Set(names.map((n) => n.toLowerCase()));
+  const near = names
+    .flatMap(similarEnvNames)
+    .filter((n) => !akzeptiert.has(n.toLowerCase()));
+  const einzig = [...new Set(near)];
+
+  if (einzig.length === 0) return `${label} ist nicht gesetzt.`;
+  return `${label} ist nicht gesetzt — gesetzt ist stattdessen ${einzig.join(", ")}. ` +
+    `Namen von Umgebungsvariablen sind groß-/kleinschreibungssensitiv und müssen exakt ${primary} heißen.`;
 }

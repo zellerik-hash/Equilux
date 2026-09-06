@@ -14,26 +14,31 @@
  * begrenzt auf zehn Anfragen je Sekunde.
  */
 
-import { env, missingEnvHint } from "./env";
+import { envAny, missingEnvHint } from "./env";
 
 /**
  * Die SEC verlangt in jeder Anfrage einen User-Agent mit einer echten
  * Kontaktadresse. Ist keiner hinterlegt, schicken wir bewusst eine erkennbare
  * Platzhalter-Kennung — dann wissen wir bei einem 403 sicher, woran es liegt,
  * statt es aus dem Statuscode raten zu müssen.
+ *
+ * Der Name ist `SEC_USER`; `SEC_USER_AGENT` gilt weiterhin, damit bestehende
+ * Einträge nicht angefasst werden müssen.
  */
-const SEC_UA_CONFIGURED = Boolean(env("SEC_USER_AGENT"));
-const SEC_UA = env("SEC_USER_AGENT") || "EQUILUX (kein SEC_USER_AGENT gesetzt)";
+/** Beide Schreibweisen gelten — SEC_USER ist der Name im Betrieb. */
+const SEC_UA_VARS = ["SEC_USER", "SEC_USER_AGENT"];
+const SEC_UA_CONFIGURED = Boolean(envAny(SEC_UA_VARS));
+const SEC_UA = envAny(SEC_UA_VARS) || "EQUILUX (kein SEC_USER gesetzt)";
 
 /** Erklärt einen 403 der SEC — mit dem Unterschied, der hier zählt. */
 function forbiddenNote(): string {
   return SEC_UA_CONFIGURED
-    ? "Die SEC weist die Anfrage ab (403), obwohl SEC_USER_AGENT gesetzt ist. Das passiert, " +
+    ? "Die SEC weist die Anfrage ab (403), obwohl SEC_USER gesetzt ist. Das passiert, " +
       "wenn die Kennung keine echte Adresse enthält oder zu viele Anfragen von derselben " +
       "Adresse kamen — in ein paar Minuten noch einmal versuchen."
-    : `${missingEnvHint("SEC_USER_AGENT")} Deshalb weist die SEC die Anfrage ab (403); ` +
+    : `${missingEnvHint(SEC_UA_VARS)} Deshalb weist die SEC die Anfrage ab (403); ` +
       "sie verlangt eine Kennung mit echter Kontaktadresse. Auf Vercel unter " +
-      "Settings → Environment Variables anlegen: SEC_USER_AGENT = \"EQUILUX (deine@mail.de)\" — " +
+      "Settings → Environment Variables anlegen: SEC_USER = \"EQUILUX (deine@mail.de)\" — " +
       "für Production, Preview und Development —, danach neu deployen.";
 }
 

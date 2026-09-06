@@ -18,7 +18,7 @@ import { valuation, type ValuationInput } from "@/lib/quant/valuation";
 import { rsi, atr, sma, risk, type Candle } from "@/lib/quant/indicators";
 import { extractOwnership } from "@/lib/quant/edgar";
 import { parseOverview, toAlphaVantage } from "@/lib/quant/alphavantage";
-import { env, missingEnvHint, resetEnvCache } from "@/lib/quant/env";
+import { env, envAny, missingEnvHint, resetEnvCache } from "@/lib/quant/env";
 
 // ── Mini-Harness ─────────────────────────────────────────────────────────────
 let passed = 0;
@@ -331,7 +331,7 @@ section("Umgebungsvariablen — Schreibweise und Vertipper");
 {
   const sicherung = { ...process.env };
   const setze = (v: Record<string, string | undefined>) => {
-    for (const k of Object.keys(process.env)) if (/^(ALPHAVANTAGE|SEC_)/i.test(k)) delete process.env[k];
+    for (const k of Object.keys(process.env)) if (/^(ALPHAVANTAGE|SEC)/i.test(k)) delete process.env[k];
     Object.assign(process.env, v);
     resetEnvCache();
   };
@@ -347,20 +347,37 @@ section("Umgebungsvariablen — Schreibweise und Vertipper");
      String(env("ALPHAVANTAGE_API_KEY")));
 
   // Ein wirklich anderer Name wird NICHT stillschweigend uebernommen …
-  setze({ SEC_USER: "EQUILUX (test@example.de)" });
-  ok("Abweichender Name wird nicht uebernommen", env("SEC_USER_AGENT") === undefined,
-     String(env("SEC_USER_AGENT")));
+  setze({ SECUSER: "EQUILUX (test@example.de)" });
+  ok("Abweichender Name wird nicht uebernommen", env("SEC_USER") === undefined,
+     String(env("SEC_USER")));
 
   // … sondern in der Meldung benannt, damit der Fehler auffindbar ist.
-  const hinweis = missingEnvHint("SEC_USER_AGENT");
-  ok("Meldung nennt den falsch benannten Eintrag", hinweis.includes("SEC_USER"), hinweis);
+  const hinweis = missingEnvHint("SEC_USER");
+  ok("Fehlender Unterstrich wird als Vertipper gemeldet", hinweis.includes("SECUSER"), hinweis);
+
+  // Eine wirklich eigene Variable ist kein Vertipper und wird nicht gemeldet.
+  setze({ SEC_NUTZER: "x" });
+  ok("Eigene Variable wird nicht als Vertipper gemeldet",
+     missingEnvHint("SEC_USER") === "SEC_USER ist nicht gesetzt.", missingEnvHint("SEC_USER"));
+
+  // Beide zugelassenen Namen der SEC-Kennung gelten, Vorrang hat der erste.
+  const SEC = ["SEC_USER", "SEC_USER_AGENT"];
+  setze({ SEC_USER_AGENT: "alt" });
+  ok("Alter Name gilt weiter", envAny(SEC) === "alt", String(envAny(SEC)));
+  setze({ SEC_USER: "neu", SEC_USER_AGENT: "alt" });
+  ok("Bei beiden gewinnt SEC_USER", envAny(SEC) === "neu", String(envAny(SEC)));
+
+  // Ein zugelassener Zweitname darf nicht als Vertipper gemeldet werden.
+  setze({ SEC_USER_AGENT: "alt" });
+  ok("Zweitname wird nicht als Fehler gemeldet", missingEnvHint(SEC) === "SEC_USER (oder SEC_USER_AGENT) ist nicht gesetzt.",
+     missingEnvHint(SEC));
 
   // Ohne aehnlichen Eintrag bleibt die Meldung knapp.
   setze({});
-  ok("Ohne Vertipper knappe Meldung", missingEnvHint("SEC_USER_AGENT") === "SEC_USER_AGENT ist nicht gesetzt.",
-     missingEnvHint("SEC_USER_AGENT"));
+  ok("Ohne Vertipper knappe Meldung", missingEnvHint("SEC_USER") === "SEC_USER ist nicht gesetzt.",
+     missingEnvHint("SEC_USER"));
 
-  for (const k of Object.keys(process.env)) if (/^(ALPHAVANTAGE|SEC_)/i.test(k)) delete process.env[k];
+  for (const k of Object.keys(process.env)) if (/^(ALPHAVANTAGE|SEC)/i.test(k)) delete process.env[k];
   Object.assign(process.env, sicherung);
   resetEnvCache();
 }

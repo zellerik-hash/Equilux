@@ -110,8 +110,13 @@ häufigste Einrichtungsfehler ist `Alphavantage_API_KEY` statt
 `ALPHAVANTAGE_API_KEY` — der Wert steht da, die Anwendung sieht ihn nicht, und
 heraus kommt eine leere Fläche ohne Grund. Deshalb liest `lib/quant/env.ts`
 jeden Schlüssel über `env()`: erst exakt, dann in beliebiger Schreibweise. Ein
-tatsächlich *anderer* Name (`SEC_USER` statt `SEC_USER_AGENT`) wird bewusst
-nicht übernommen, sondern von `missingEnvHint()` in der Meldung benannt.
+tatsächlich *anderer* Name wird bewusst nicht übernommen, sondern von
+`missingEnvHint()` in der Meldung benannt.
+
+Die SEC-Kennung heißt **`SEC_USER`**; `SEC_USER_AGENT` gilt als Zweitname
+weiter (`envAny(["SEC_USER", "SEC_USER_AGENT"])`), damit bestehende Einträge
+nicht angefasst werden müssen. Ein zugelassener Zweitname darf nie als
+Vertipper gemeldet werden — das prüft ein Test.
 
 Alpha Vantage meldet Kontingent- und Fehlerfälle mit **Status 200** und einem
 Hinweistext (`Note` / `Information`) — der Statuscode allein genügt nicht.
