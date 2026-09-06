@@ -18,6 +18,7 @@ import { valuation, type ValuationInput } from "@/lib/quant/valuation";
 import { rsi, atr, sma, risk, type Candle } from "@/lib/quant/indicators";
 import { extractOwnership } from "@/lib/quant/edgar";
 import { parseOverview, toAlphaVantage } from "@/lib/quant/alphavantage";
+import { env, missingEnvHint, resetEnvCache } from "@/lib/quant/env";
 
 // ── Mini-Harness ─────────────────────────────────────────────────────────────
 let passed = 0;
@@ -323,6 +324,45 @@ section("Alpha Vantage OVERVIEW — Kursziel und Urteile");
   ok("Xetra-Kürzel wird nicht angefragt", toAlphaVantage("SAP.DE") === null);
   ok("Index wird nicht angefragt", toAlphaVantage("^GDAXI") === null);
   ok("Krypto wird nicht angefragt", toAlphaVantage("BTC-USD") === null);
+}
+
+// ── 14. Umgebungsvariablen — der haeufigste Einrichtungsfehler ───────────────
+section("Umgebungsvariablen — Schreibweise und Vertipper");
+{
+  const sicherung = { ...process.env };
+  const setze = (v: Record<string, string | undefined>) => {
+    for (const k of Object.keys(process.env)) if (/^(ALPHAVANTAGE|SEC_)/i.test(k)) delete process.env[k];
+    Object.assign(process.env, v);
+    resetEnvCache();
+  };
+
+  // Exakt geschrieben: trivial, aber der Bezugspunkt.
+  setze({ ALPHAVANTAGE_API_KEY: "abc" });
+  ok("Exakter Name wird gefunden", env("ALPHAVANTAGE_API_KEY") === "abc");
+
+  // Der eigentliche Fall: Vercel-Eingabe in gemischter Schreibweise. Node
+  // findet die Variable dann nicht, obwohl der Wert gesetzt ist.
+  setze({ Alphavantage_API_KEY: "abc" });
+  ok("Andere Schreibweise wird trotzdem gefunden", env("ALPHAVANTAGE_API_KEY") === "abc",
+     String(env("ALPHAVANTAGE_API_KEY")));
+
+  // Ein wirklich anderer Name wird NICHT stillschweigend uebernommen …
+  setze({ SEC_USER: "EQUILUX (test@example.de)" });
+  ok("Abweichender Name wird nicht uebernommen", env("SEC_USER_AGENT") === undefined,
+     String(env("SEC_USER_AGENT")));
+
+  // … sondern in der Meldung benannt, damit der Fehler auffindbar ist.
+  const hinweis = missingEnvHint("SEC_USER_AGENT");
+  ok("Meldung nennt den falsch benannten Eintrag", hinweis.includes("SEC_USER"), hinweis);
+
+  // Ohne aehnlichen Eintrag bleibt die Meldung knapp.
+  setze({});
+  ok("Ohne Vertipper knappe Meldung", missingEnvHint("SEC_USER_AGENT") === "SEC_USER_AGENT ist nicht gesetzt.",
+     missingEnvHint("SEC_USER_AGENT"));
+
+  for (const k of Object.keys(process.env)) if (/^(ALPHAVANTAGE|SEC_)/i.test(k)) delete process.env[k];
+  Object.assign(process.env, sicherung);
+  resetEnvCache();
 }
 
 // ── Ergebnis ─────────────────────────────────────────────────────────────────

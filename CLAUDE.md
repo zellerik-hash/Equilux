@@ -105,6 +105,14 @@ und wenn beides ausfällt, ein Satz der sagt **warum** — nie eine stille Lück
 | Kennzahlen | EODHD Fundamentals | Alpha Vantage `OVERVIEW` |
 | Intraday | Twelve Data | EODHD (dort kostenpflichtig) |
 
+**Namen von Umgebungsvariablen sind groß-/kleinschreibungssensitiv.** Der
+häufigste Einrichtungsfehler ist `Alphavantage_API_KEY` statt
+`ALPHAVANTAGE_API_KEY` — der Wert steht da, die Anwendung sieht ihn nicht, und
+heraus kommt eine leere Fläche ohne Grund. Deshalb liest `lib/quant/env.ts`
+jeden Schlüssel über `env()`: erst exakt, dann in beliebiger Schreibweise. Ein
+tatsächlich *anderer* Name (`SEC_USER` statt `SEC_USER_AGENT`) wird bewusst
+nicht übernommen, sondern von `missingEnvHint()` in der Meldung benannt.
+
 Alpha Vantage meldet Kontingent- und Fehlerfälle mit **Status 200** und einem
 Hinweistext (`Note` / `Information`) — der Statuscode allein genügt nicht.
 Fehlende Werte stehen dort als `"None"`, `"-"` oder `""`, nie als `null`.

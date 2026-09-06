@@ -13,6 +13,8 @@
  * Nur serverseitig; der Schlüssel darf nie in den Client.
  */
 
+import { env, missingEnvHint } from "./env";
+
 export interface AvRatings {
   strongBuy: number;
   buy: number;
@@ -86,11 +88,11 @@ export function parseOverview(raw: Record<string, unknown>): AvOverview | null {
  * `note` sagt dann, warum, damit die Oberfläche keine stille Lücke zeigt.
  */
 export async function avOverview(symbol: string): Promise<{ data: AvOverview | null; note?: string }> {
-  const key = process.env.ALPHAVANTAGE_API_KEY?.trim();
+  const key = env("ALPHAVANTAGE_API_KEY");
   if (!key) {
     return {
       data: null,
-      note: "Kein ALPHAVANTAGE_API_KEY hinterlegt — der Schlüssel ist kostenlos " +
+      note: `${missingEnvHint("ALPHAVANTAGE_API_KEY")} Der Schlüssel ist kostenlos ` +
         "(alphavantage.co/support/#api-key) und schaltet Kursziele und Analystenurteile frei.",
     };
   }
