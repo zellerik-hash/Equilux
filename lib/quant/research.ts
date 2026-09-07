@@ -17,8 +17,24 @@ export interface AskResult {
   note?: string;
 }
 
+/**
+ * Stellschrauben für Aufrufe, die mehr brauchen als die Standardrecherche.
+ * Der Marktbrief etwa sucht breiter und darf länger laufen.
+ */
+export interface AskOptions {
+  /** Überschreibt Modellwahl und `EQUILUX_RESEARCH_MODEL`. */
+  model?: string;
+  maxTokens?: number;
+  /** Denkaufwand: `low`, `medium`, `high`. */
+  effort?: string;
+  timeoutMs?: number;
+}
+
 /** Ein Aufruf der Messages-API mit Websuche. */
-async function call(key: string, model: string, searchTool: string, system: string, prompt: string, maxUses: number) {
+async function call(
+  key: string, model: string, searchTool: string,
+  system: string, prompt: string, maxUses: number, opts: AskOptions,
+) {
   return fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -30,15 +46,15 @@ async function call(key: string, model: string, searchTool: string, system: stri
       model,
       // Reicht für die Auswertung samt adaptivem Nachdenken; die Ausgabe selbst
       // ist ein kurzes JSON.
-      max_tokens: 16000,
+      max_tokens: opts.maxTokens ?? 16000,
       // Belegte Recherche ist Fleißarbeit, kein schweres Denken — die mittlere
       // Stufe spart Tokens, ohne dass die Belegprüfung leidet.
-      output_config: { effort: "medium" },
+      output_config: { effort: opts.effort ?? "medium" },
       system,
       messages: [{ role: "user", content: prompt }],
       tools: [{ type: searchTool, name: "web_search", max_uses: maxUses }],
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),
   });
 }
 
@@ -49,20 +65,22 @@ async function call(key: string, model: string, searchTool: string, system: stri
  * die Oberfläche sagen kann, woran es lag, statt leer zu bleiben.
  */
 export async function askWithSearch(
-  system: string, prompt: string, maxSearches = 8,
+  system: string, prompt: string, maxSearches = 8, opts: AskOptions = {},
 ): Promise<AskResult> {
   const key = env("ANTHROPIC_API_KEY");
   if (!key) return { text: null, note: "Ohne ANTHROPIC_API_KEY keine Recherche." };
   if (env("EQUILUX_RESEARCH") === "off") {
     return { text: null, note: "Recherche ist per EQUILUX_RESEARCH=off abgeschaltet." };
   }
-  const model = env("EQUILUX_RESEARCH_MODEL") || "claude-opus-5";
+  const model = opts.model || env("EQUILUX_RESEARCH_MODEL") || "claude-opus-5";
 
   try {
     // Die neuere Websuche mit dynamischer Filterung; ältere Modelle kennen nur
     // die Grundvariante, deshalb ein zweiter Versuch bei einem 400.
-    let res = await call(key, model, "web_search_20260209", system, prompt, maxSearches);
-    if (res.status === 400) res = await call(key, model, "web_search_20250305", system, prompt, maxSearches);
+    let res = await call(key, model, "web_search_20260209", system, prompt, maxSearches, opts);
+    if (res.status === 400) {
+      res = await call(key, model, "web_search_20250305", system, prompt, maxSearches, opts);
+    }
 
     if (!res.ok) {
       return { text: null, note: `Recherche fehlgeschlagen (${res.status}): ${(await res.text()).slice(0, 200)}` };
@@ -78,7 +96,7 @@ export async function askWithSearch(
     return {
       text: null,
       note: e instanceof Error && e.name === "TimeoutError"
-        ? "Die Recherche brauchte länger als zwei Minuten."
+        ? "Die Recherche hat die Zeitgrenze überschritten."
         : "Die Recherche ist nicht erreichbar.",
     };
   }

@@ -105,6 +105,7 @@ und wenn beides ausfällt, ein Satz der sagt **warum** — nie eine stille Lück
 | Kursziel/Analysten | EODHD AnalystRatings | Alpha Vantage `OVERVIEW` (nur US) |
 | Kennzahlen | EODHD Fundamentals | Alpha Vantage `OVERVIEW` |
 | Intraday | Twelve Data | EODHD (dort kostenpflichtig) |
+| Marktbrief-Stände | EODHD Realtime (`marketdata.ts`) | Websuche, gekennzeichnet als „Web" |
 
 **Namen von Umgebungsvariablen sind groß-/kleinschreibungssensitiv.** Der
 häufigste Einrichtungsfehler ist `Alphavantage_API_KEY` statt
@@ -136,6 +137,34 @@ Block im Unternehmens-Dossier, verbrauchte jeder Seitenaufruf eines. Dazu zwölf
 Stunden Zwischenspeicher, auch für Fehlversuche, und Nicht-US-Kürzel werden gar
 nicht erst angefragt. Der Zwischenspeicher lebt im Prozess, überlebt auf Vercel
 also keinen Kaltstart — er dämpft, er garantiert nichts.
+
+### Marktbrief: Zahlen aus dem Feed, Text vom Modell
+
+Der Brief ließ früher **jede** Zahl recherchieren, auch den DAX-Stand. Das ist
+die anfälligste Stelle des Bausteins: Kursseiten tragen oft keinen Zeitstempel,
+und ein Schlusskurs von gestern sieht dort exakt aus wie ein aktueller Kurs.
+Der System-Prompt warnt davor — aber eine Warnung ist keine Prüfung.
+
+Deshalb holt `lib/quant/marketdata.ts` die Stände von Indizes, Makro-Werten und
+Watchlist **vor** dem Aufruf aus EODHD (ein Bulk-Abruf, nicht einer je Symbol)
+und legt sie dem Modell als feststehend vor. Das Modell ordnet ein und schreibt,
+rechnet aber nicht mehr an den Ständen. Was der Feed nicht hergibt, bleibt der
+Recherche überlassen und trägt in der Oberfläche die Marke „Web"; Feed-Stände
+tragen ihre Uhrzeit. **Die Vermischung stillschweigend zuzulassen wäre das
+Schlechteste** — dann wüsste niemand mehr, welche Zahl belastbar ist.
+
+`normalizeBrief()` ist Pflicht zwischen Antwort und Oberfläche. Vorher ging der
+Rohwert aus `JSON.parse` direkt als `Brief` durch; fehlte ein Feld, starb das
+Panel an `b.calendar.length`. Jetzt kommt immer ein vollständiges Objekt heraus,
+notfalls mit leeren Listen, und Quellen ohne `http(s)` fallen raus wie überall.
+
+`resolveWatch()` in der Brief-Route bildet Watchlist-Namen nur bei Kürzel- oder
+Namensgleichheit auf einen Ticker ab. Eine lockere Teilstringsuche zöge
+„Siemens Energy" auf Siemens — und dann stünde der falsche Kurs unter dem
+richtigen Namen. Was nicht trifft, recherchiert das Modell.
+
+Zehn Minuten Zwischenspeicher je Session/Watchlist, `?fresh=1` erzwingt neu.
+Jeder Aufruf kostet eine Websuche-Runde.
 
 ### Web-Recherche (Belegpflicht)
 

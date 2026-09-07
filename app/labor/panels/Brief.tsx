@@ -17,6 +17,8 @@ interface Payload {
   label: string;
   city: "london" | "newyork";
   clocks: { key: string; label: string; at: string }[];
+  at: string;
+  feedNote?: string;
 }
 
 export default function Brief() {
@@ -26,20 +28,34 @@ export default function Brief() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<Payload | null>(null);
+  const [cached, setCached] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
 
-  async function run() {
-    setBusy(true); setErr(null);
+  async function run(fresh = false) {
+    setBusy(true); setErr(null); setCopied(null);
     try {
       const q = new URLSearchParams();
       if (session) q.set("session", session);
       if (watch.trim()) q.set("watchlist", watch);
+      if (fresh) q.set("fresh", "1");
       const r = await fetch(`/api/quant/brief?${q}`);
       const j = await r.json();
       if (!j.ok) throw new Error(j.error);
       setData(j.data);
+      setCached(Boolean(j.cached));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Briefing fehlgeschlagen");
     } finally { setBusy(false); }
+  }
+
+  async function copy() {
+    if (!data) return;
+    try {
+      await navigator.clipboard.writeText(asText(data));
+      setCopied("Briefing in die Zwischenablage kopiert.");
+    } catch {
+      setCopied("Die Zwischenablage ist in diesem Browser gesperrt.");
+    }
   }
 
   const b = data?.brief;
@@ -65,14 +81,15 @@ export default function Brief() {
           <span>Watchlist</span>
           <input value={watch} onChange={(e) => setWatch(e.target.value)} />
         </label>
-        <button className={s.primary} onClick={run} disabled={busy}>
+        <button className={s.primary} onClick={() => run()} disabled={busy}>
           {busy ? "recherchiert …" : "Briefing erzeugen"}
         </button>
       </div>
 
       {busy && (
         <p className={s.note}>
-          Die Recherche läuft über die Websuche und dauert meist 30 bis 90 Sekunden.
+          Kursstände kommen aus dem Feed, der Rest aus der Websuche — das dauert meist
+          30 bis 90 Sekunden.
         </p>
       )}
       {err && <p className={s.warn}>{err}</p>}
@@ -83,6 +100,9 @@ export default function Brief() {
             <span className={data.city === "newyork" ? s.tagNy : s.tagLon}>{data.label}</span>
             <span className={s.mono}>
               {data.clocks.map((c) => `${c.at} ${c.label.split(" ")[0]}`).join("  ·  ")}
+            </span>
+            <span className={s.mono}>
+              erzeugt {data.at} Uhr{cached ? " · aus dem Zwischenspeicher" : ""}
             </span>
           </div>
           <h2 className={s.briefTitle}>{b.headline}</h2>
@@ -166,16 +186,61 @@ export default function Brief() {
             </>
           )}
 
+          <div className={s.briefBar}>
+            <button className={s.ghost} onClick={copy}>Als Text kopieren</button>
+            <button className={s.ghost} onClick={() => run(true)} disabled={busy}>
+              Neu erzeugen
+            </button>
+            {copied && <span className={s.note}>{copied}</span>}
+          </div>
+
+          {data.feedNote && <p className={s.note}>{data.feedNote}</p>}
           <p className={s.note}>
-            Recherchiert über die Websuche. Zahlen können verzögert oder fehlerhaft sein —
-            vor jeder Verwendung gegen die Primärquelle prüfen. Keine Anlageberatung.
-            Compliance-Regeln des Arbeitgebers zu Eigengeschäften und Research gelten
-            unverändert.
+            Stände mit Uhrzeit stammen aus dem Kursfeed; alles mit der Marke „Web" ist
+            recherchiert und vor der Verwendung gegen die Primärquelle zu prüfen. Keine
+            Anlageberatung. Compliance-Regeln des Arbeitgebers zu Eigengeschäften und
+            Research gelten unverändert.
           </p>
         </article>
       )}
     </div>
   );
+}
+
+/**
+ * Der Brief als reiner Text — zum Einfügen in eine Mail oder ein Protokoll.
+ * Die Herkunft jeder Zahl wandert mit: ohne sie wäre draußen nicht mehr
+ * erkennbar, was aus dem Feed kam und was recherchiert ist.
+ */
+function asText(d: Payload): string {
+  const b = d.brief;
+  const L: string[] = [];
+  const q = (x: { name: string; level: string; change_pct: string; src?: string; at?: string; note?: string }) =>
+    `  ${x.name}: ${x.level}  ${x.change_pct}${x.change_pct === "k. A." ? "" : " %"}` +
+    (x.at ? `  (Feed, ${x.at} Uhr)` : x.src === "recherche" ? "  (Web)" : "") +
+    (x.note ? `  — ${x.note}` : "");
+
+  L.push(`EQUILUX — ${d.label}, erzeugt ${d.at} Uhr`, "", b.headline);
+  if (b.stance_note) L.push(`${stanceLabel(b.stance)}: ${b.stance_note}`);
+
+  const block = (title: string, lines: string[]) => {
+    if (!lines.length) return;
+    L.push("", title.toUpperCase(), ...lines);
+  };
+  block("Lage", b.summary.map((x) => `  · ${x}`));
+  block("Indizes", b.markets.map(q));
+  block("Zinsen, Devisen, Rohstoffe", b.macro.map(q));
+  block("Wirtschaftskalender", b.calendar.map((c) =>
+    `  ${c.time || "—"}  ${c.region}  ${c.event}  ` +
+    `Konsens ${c.consensus || "—"} / vorher ${c.prior || "—"} / ist ${c.actual || "—"}`));
+  block("Zahlen heute", b.earnings.map((e) =>
+    `  ${e.slot}  ${e.name}${e.ticker ? ` (${e.ticker})` : ""}${e.note ? ` — ${e.note}` : ""}`));
+  block("Watchlist", b.watchlist.map(q));
+  block("Nächste Session", b.watch_next.map((x) => `  · ${x}`));
+  block("Quellen", b.sources.map((x) => `  ${x.title} — ${x.url}`));
+
+  L.push("", "Keine Anlageberatung. Zahlen ohne Feed-Zeitstempel sind recherchiert.");
+  return L.join("\n");
 }
 
 function stanceLabel(v: string): string {
@@ -194,7 +259,10 @@ function Bullets({ title, items }: { title: string; items: string[] }) {
 
 function Quotes({ title, items, notes }: {
   title: string;
-  items: { name: string; level: string; change_pct: string; note?: string }[];
+  items: {
+    name: string; level: string; change_pct: string; note?: string;
+    src?: "feed" | "recherche"; at?: string;
+  }[];
   notes?: boolean;
 }) {
   if (!items?.length) return null;
@@ -203,14 +271,22 @@ function Quotes({ title, items, notes }: {
       <h3 className={s.h3}>{title}</h3>
       <div className={s.stats}>
         {items.map((q, i) => {
-          const up = q.change_pct?.trim().startsWith("+");
-          const down = q.change_pct?.trim().startsWith("-");
+          const chg = q.change_pct?.trim() ?? "";
+          const up = chg.startsWith("+");
+          const down = chg.startsWith("-");
+          // „k. A." ist keine Zahl — dahinter darf kein Prozentzeichen stehen.
+          const isNum = /^[+-]?[\d.,]+$/.test(chg);
           return (
             <div key={i} className={s.stat}>
               <span className={s.statLabel}>{q.name}</span>
               <span className={s.statValue}>{q.level || "—"}</span>
               <span className={`${s.statSub} ${up ? s.up : down ? s.down : ""}`}>
-                {q.change_pct}{q.change_pct ? " %" : ""}
+                {chg || "—"}{isNum ? " %" : ""}
+              </span>
+              <span className={s.srcRow}>
+                {q.at
+                  ? <span className={s.srcFeed}>Feed · {q.at}</span>
+                  : q.src === "recherche" ? <span className={s.srcWeb}>Web</span> : null}
               </span>
               {notes && q.note && <span className={s.statSub}>{q.note}</span>}
             </div>

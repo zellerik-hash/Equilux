@@ -9,6 +9,9 @@
  * Nur serverseitig aufrufen: der API-Schlüssel darf den Browser nie sehen.
  */
 
+import { askWithSearch, extractJson, validSource } from "./research";
+import { feedFacts, type FeedQuote } from "./marketdata";
+
 export type SessionKey = "london_open" | "ny_open" | "london_close" | "ny_close";
 
 export interface SessionSpec {
@@ -88,7 +91,20 @@ export function currentSession(tz: string, when = new Date()): SessionKey {
 
 // ── Datenmodell ────────────────────────────────────────────────────────────
 
-export interface Quote { name: string; level: string; change_pct: string; note?: string }
+export interface Quote {
+  name: string;
+  level: string;
+  change_pct: string;
+  note?: string;
+  /**
+   * Woher der Stand kommt. `feed` heißt: aus dem Kursfeed, mit Zeitstempel.
+   * `recherche` heißt: aus der Websuche, also prüfbedürftig. Der Unterschied
+   * gehört in die Oberfläche — sonst weiß niemand, welche Zahl belastbar ist.
+   */
+  src?: "feed" | "recherche";
+  /** Uhrzeit des Standes; nur bei Feed-Kursen gesetzt. */
+  at?: string;
+}
 export interface CalendarItem {
   time: string; region: string; event: string;
   consensus: string; prior: string; actual: string;
@@ -96,6 +112,15 @@ export interface CalendarItem {
 }
 export interface EarningsItem { slot: string; name: string; ticker?: string; note: string }
 export interface SourceItem { title: string; url: string }
+
+/** Feed-Kurse, nach den drei Blöcken des Briefs getrennt. */
+export interface BriefFeed {
+  markets: FeedQuote[];
+  macro: FeedQuote[];
+  watchlist: FeedQuote[];
+  /** Warum etwas nicht aus dem Feed kam. */
+  note?: string;
+}
 
 export interface Brief {
   headline: string;
@@ -120,6 +145,8 @@ export interface BriefOptions {
   extraFocus?: string;
   model?: string;
   maxSearches?: number;
+  /** Bereits verifizierte Kursstände; das Modell übernimmt sie unverändert. */
+  feed?: BriefFeed;
 }
 
 const SYSTEM = `Du bist ein Markt-Research-Assistent und schreibst kurze, faktendichte \
@@ -136,6 +163,9 @@ der wie ein aktueller Kurs aussieht. Steht keine Uhrzeit an der Zahl, ist die Za
 verwendbar.
 - Wenn eine Zahl nicht sauber belegbar ist, schreibe "k. A." statt zu schätzen. Erfinde \
 niemals Kurse, Konsenswerte oder Termine.
+- Stände, die dir als verifiziert vorgelegt werden, stammen aus einem Kursfeed mit \
+Zeitstempel. Übernimm sie unverändert, recherchiere sie nicht nach und widersprich ihnen \
+nicht. Findest du in einer Quelle eine abweichende Zahl, gilt der vorgelegte Stand.
 - Ordne Bewegungen nur dann einer Ursache zu, wenn sie belegbar ist. Nicht jede Bewegung \
 von 0,4 Prozent hat einen Grund.
 - Keine Handelsempfehlungen, keine Kursziele, keine Kauf- oder Verkaufsaufrufe.
@@ -167,14 +197,19 @@ const DEFAULT_MACRO = ["Bund 10J", "US Treasury 10J", "EUR/USD", "GBP/USD", "Bre
  * Wirft, wenn der Schlüssel fehlt oder die API nicht antwortet.
  */
 export async function generateBrief(opts: BriefOptions): Promise<Brief> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("ANTHROPIC_API_KEY ist nicht gesetzt.");
-
   const tz = opts.timezone ?? "Europe/Berlin";
   const spec = SESSIONS[opts.session];
-  const indices = opts.indices ?? DEFAULT_INDICES;
-  const macro = opts.macro ?? DEFAULT_MACRO;
-  const watch = opts.watchlist ?? [];
+  const feed = opts.feed;
+  // Was der Feed schon liefert, muss die Recherche nicht mehr suchen.
+  const fromFeed = new Set(
+    [...(feed?.markets ?? []), ...(feed?.macro ?? []), ...(feed?.watchlist ?? [])]
+      .map((q) => q.name.toLowerCase()),
+  );
+  const open = (list: string[]) => list.filter((n) => !fromFeed.has(n.toLowerCase()));
+
+  const indices = open(opts.indices ?? DEFAULT_INDICES);
+  const macro = open(opts.macro ?? DEFAULT_MACRO);
+  const watch = open(opts.watchlist ?? []);
 
   const marks = SESSION_ORDER.map((k) => `${SESSIONS[k].label} um ${sessionClock(k, tz)}`).join(", ");
   const now = new Intl.DateTimeFormat("de-DE", {
@@ -182,16 +217,31 @@ export async function generateBrief(opts: BriefOptions): Promise<Brief> {
     year: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(new Date());
 
+  const facts = feed
+    ? [
+        feed.markets.length ? `Indizes:\n${feedFacts(feed.markets)}` : "",
+        feed.macro.length ? `Zinsen, Devisen, Rohstoffe:\n${feedFacts(feed.macro)}` : "",
+        feed.watchlist.length ? `Watchlist:\n${feedFacts(feed.watchlist)}` : "",
+      ].filter(Boolean).join("\n\n")
+    : "";
+
   const prompt = `Erstelle das Session-Briefing "${spec.label}".
 
 Zeitpunkt: ${now} Uhr (${tz}).
 Heutige Session-Marken: ${marks}.
 
 Schwerpunkt: ${spec.focus}
+${facts ? `
+Diese Stände sind bereits aus einem Kursfeed verifiziert. Nimm sie als gegeben,
+suche sie nicht nach und führe sie nicht noch einmal in deiner Antwort auf —
+sie werden automatisch ergänzt. Beziehe dich in "summary", "stance_note" und
+"watch_next" auf sie:
 
+${facts}
+` : ""}
 Pflichtinhalte:
-- markets: ${indices.join(", ")}
-- macro: ${macro.join(", ")}
+${indices.length ? `- markets: ${indices.join(", ")}` : "- markets: leer lassen, die Indizes stehen schon fest."}
+${macro.length ? `- macro: ${macro.join(", ")}` : "- macro: leer lassen, die Werte stehen schon fest."}
 - calendar: alle Termine mit Marktrelevanz von heute, Uhrzeiten in ${tz}. Veröffentlichte mit Wert in "actual", ausstehende mit "—".
 - earnings: relevante Berichte von heute und heute Abend.
 ${watch.length ? `- watchlist: ${watch.join(", ")}. Nur Werte mit belastbaren Daten.` : "- watchlist: leer lassen."}
@@ -205,54 +255,140 @@ ${SCHEMA}
 
 Leere Listen sind erlaubt. Lass lieber einen Eintrag weg, als eine Zahl zu raten.`;
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: opts.model ?? "claude-sonnet-5",
-      max_tokens: 8000,
-      system: SYSTEM,
-      messages: [{ role: "user", content: prompt }],
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: opts.maxSearches ?? 14 }],
-    }),
+  const { text, note } = await askWithSearch(SYSTEM, prompt, opts.maxSearches ?? 14, {
+    model: opts.model,
+    // Der Brief ist die längste Ausgabe im Haus — Kalender, Earnings, Quellen.
+    maxTokens: 20_000,
+    // Vier Blöcke aus vielen Suchtreffern zusammenzuziehen ist mehr als
+    // Fleißarbeit; hier lohnt die höhere Stufe.
+    effort: "high",
+    timeoutMs: 240_000,
   });
+  if (!text) throw new Error(note ?? "Briefing fehlgeschlagen.");
 
-  if (!res.ok) throw new Error(`Anthropic-API ${res.status}: ${(await res.text()).slice(0, 300)}`);
-
-  const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
-  const text = (data.content ?? [])
-    .filter((b) => b.type === "text")
-    .map((b) => b.text ?? "")
-    .join("\n")
-    .trim();
-
-  return parseBrief(text);
+  return normalizeBrief(extractJson(text), feed, text);
 }
 
-/** JSON aus der Antwort schälen, auch wenn Codefences oder Prosa drumherum stehen. */
-export function parseBrief(text: string): Brief {
-  const cleaned = text.replace(/^```(?:json)?/gm, "").replace(/```$/gm, "").trim();
-  const attempt = (s: string): Brief | null => {
-    try { return JSON.parse(s) as Brief; } catch { return null; }
-  };
-  const direct = attempt(cleaned);
-  if (direct) return direct;
+/* ---------- Normalisierung ---------- */
 
-  const a = cleaned.indexOf("{");
-  const b = cleaned.lastIndexOf("}");
-  if (a !== -1 && b > a) {
-    const sliced = attempt(cleaned.slice(a, b + 1));
-    if (sliced) return sliced;
-  }
+const str = (v: unknown, max = 400): string =>
+  typeof v === "string" ? v.trim().slice(0, max)
+  : typeof v === "number" && Number.isFinite(v) ? String(v)
+  : "";
+
+const strList = (v: unknown, max = 12): string[] =>
+  (Array.isArray(v) ? v : []).map((x) => str(x, 600)).filter(Boolean).slice(0, max);
+
+/** Eine Quote-Zeile aus der Antwort; ohne Namen zählt sie nicht. */
+function quote(v: unknown): Quote | null {
+  if (!v || typeof v !== "object") return null;
+  const r = v as Record<string, unknown>;
+  const name = str(r.name, 60);
+  if (!name) return null;
+  const note = str(r.note, 300);
   return {
-    headline: "Briefing konnte nicht strukturiert gelesen werden",
-    stance: "ruhig", stance_note: "Rohtext in der Zusammenfassung",
-    summary: [text.slice(0, 1200)],
-    markets: [], macro: [], calendar: [], earnings: [],
-    watchlist: [], watch_next: [], sources: [],
+    name,
+    level: str(r.level, 30) || "k. A.",
+    change_pct: str(r.change_pct, 20),
+    ...(note ? { note } : {}),
+    src: "recherche",
   };
+}
+
+const IMPACTS = new Set(["hoch", "mittel", "niedrig"]);
+
+function calendarItem(v: unknown): CalendarItem | null {
+  if (!v || typeof v !== "object") return null;
+  const r = v as Record<string, unknown>;
+  const event = str(r.event, 160);
+  if (!event) return null;
+  const impact = str(r.impact, 20).toLowerCase();
+  return {
+    time: str(r.time, 12), region: str(r.region, 12) || "—", event,
+    consensus: str(r.consensus, 30), prior: str(r.prior, 30), actual: str(r.actual, 30),
+    impact: IMPACTS.has(impact) ? impact : "mittel",
+  };
+}
+
+function earningsItem(v: unknown): EarningsItem | null {
+  if (!v || typeof v !== "object") return null;
+  const r = v as Record<string, unknown>;
+  const name = str(r.name, 80);
+  if (!name) return null;
+  const ticker = str(r.ticker, 20);
+  return {
+    slot: str(r.slot, 30) || "—", name,
+    ...(ticker ? { ticker } : {}),
+    note: str(r.note, 300),
+  };
+}
+
+/** Feed-Kurs in eine Brief-Zeile übersetzen — mit Herkunft und Zeitstempel. */
+function fromFeedQuote(q: FeedQuote): Quote {
+  return {
+    name: q.name, level: q.level, change_pct: q.change_pct,
+    src: "feed", ...(q.at ? { at: q.at } : {}),
+  };
+}
+
+/**
+ * Feed-Kurse vor die recherchierten setzen und Doppelnennungen entfernen.
+ * Der Feed gewinnt immer: er trägt einen Zeitstempel, die Recherche nicht.
+ */
+function mergeQuotes(feed: FeedQuote[], researched: Quote[]): Quote[] {
+  const out = feed.map(fromFeedQuote);
+  const seen = new Set(out.map((q) => q.name.toLowerCase()));
+  for (const q of researched) {
+    const k = q.name.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(q);
+  }
+  return out.slice(0, 24);
+}
+
+/**
+ * Die Antwort in ein Brief-Objekt überführen, auf das sich die Oberfläche
+ * verlassen kann.
+ *
+ * Der frühere Weg war `JSON.parse` und fertig — das Ergebnis wurde als `Brief`
+ * ausgegeben, ohne dass irgendetwas geprüft war. Fehlte in der Antwort ein
+ * Feld, stand dort `undefined`, und das Panel starb beim Rendern an
+ * `b.calendar.length`. Hier kommt am Ende immer ein vollständiges Objekt
+ * heraus, notfalls mit leeren Listen.
+ */
+export function normalizeBrief(raw: unknown, feed?: BriefFeed, fallbackText = ""): Brief {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const list = <T>(v: unknown, f: (x: unknown) => T | null, max: number): T[] =>
+    (Array.isArray(v) ? v : []).map(f).filter((x): x is T => x !== null).slice(0, max);
+
+  const headline = str(o.headline, 200);
+  const summary = strList(o.summary, 10);
+  const stance = str(o.stance, 20).toLowerCase();
+
+  return {
+    headline: headline || (fallbackText
+      ? "Briefing konnte nicht strukturiert gelesen werden"
+      : "Kein Briefing"),
+    stance: ["risk_on", "risk_off", "gemischt", "ruhig"].includes(stance) ? stance : "gemischt",
+    stance_note: str(o.stance_note, 300),
+    summary: summary.length ? summary : (fallbackText ? [fallbackText.slice(0, 1200)] : []),
+    markets: mergeQuotes(feed?.markets ?? [], list(o.markets, quote, 24)),
+    macro: mergeQuotes(feed?.macro ?? [], list(o.macro, quote, 24)),
+    calendar: list(o.calendar, calendarItem, 40),
+    earnings: list(o.earnings, earningsItem, 30),
+    watchlist: mergeQuotes(feed?.watchlist ?? [], list(o.watchlist, quote, 24)),
+    watch_next: strList(o.watch_next, 8),
+    sources: list(o.sources, (v) => {
+      if (!v || typeof v !== "object") return null;
+      const r = v as Record<string, unknown>;
+      const url = validSource(r.url);
+      return url ? { title: str(r.title, 120) || url, url } : null;
+    }, 20),
+  };
+}
+
+/** JSON aus der Antwort schälen und normalisieren. */
+export function parseBrief(text: string, feed?: BriefFeed): Brief {
+  return normalizeBrief(extractJson(text), feed, text);
 }

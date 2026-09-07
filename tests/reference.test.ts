@@ -22,6 +22,8 @@ import { env, envAny, missingEnvHint, resetEnvCache } from "@/lib/quant/env";
 import { parseRelations } from "@/lib/quant/relations";
 import { usListing } from "@/lib/quant/listing";
 import { cleanHouse, parseHouses } from "@/lib/quant/analystHouses";
+import { normalizeBrief, parseBrief, type BriefFeed } from "@/lib/quant/brief";
+import { quoteFrom, refFromTicker, stampAt, feedFacts, type FeedQuote } from "@/lib/quant/marketdata";
 
 // ── Mini-Harness ─────────────────────────────────────────────────────────────
 let passed = 0;
@@ -473,6 +475,131 @@ section("Analystenhaeuser — was durchkommt und was nicht");
   // Unlesbare Antwort ergibt eine leere Liste mit Begruendung.
   const kaputt = parseHouses("Dazu habe ich nichts gefunden.");
   ok("Unlesbare Antwort ergibt leere Liste", kaputt.houses.length === 0 && !!kaputt.note, String(kaputt.note));
+}
+
+// ── 18. Marktbrief — eine schiefe Antwort darf die Oberflaeche nicht killen ──
+section("Marktbrief — Normalisierung");
+{
+  // Der frueher benutzte Weg war JSON.parse und fertig. Fehlte in der Antwort
+  // ein Feld, stand dort undefined — und das Panel starb an b.calendar.length.
+  const leer = normalizeBrief({});
+  const listen = ["markets", "macro", "calendar", "earnings", "watchlist", "watch_next", "sources"] as const;
+  ok("Fehlende Felder werden zu leeren Listen",
+     listen.every((k) => Array.isArray(leer[k])), JSON.stringify(leer));
+  ok("Auch aus null kommt ein vollstaendiges Objekt",
+     listen.every((k) => Array.isArray(normalizeBrief(null)[k])));
+
+  // Falsche Typen an der Stelle einer Liste duerfen nicht durchschlagen.
+  const schief = normalizeBrief({ markets: "DAX", calendar: { time: "14:30" }, summary: 42 });
+  ok("Ein String statt einer Liste ergibt eine leere Liste",
+     schief.markets.length === 0 && schief.calendar.length === 0, JSON.stringify(schief.markets));
+
+  // Eintraege ohne den tragenden Schluessel zaehlen nicht.
+  const halb = normalizeBrief({
+    markets: [{ level: "1", change_pct: "+1" }, { name: "DAX", level: "24.310,55", change_pct: "+0,84" }],
+    calendar: [{ time: "14:30", region: "US" }, { time: "14:30", region: "US", event: "CPI" }],
+    earnings: [{ slot: "vorbörslich" }, { slot: "nachbörslich", name: "Nvidia" }],
+  });
+  ok("Quote ohne Namen faellt raus", halb.markets.length === 1 && halb.markets[0].name === "DAX");
+  ok("Kalendereintrag ohne Termin faellt raus", halb.calendar.length === 1);
+  ok("Earnings ohne Namen faellt raus", halb.earnings.length === 1);
+
+  // Belegpflicht auch hier: eine Quelle ohne echte Adresse ist keine Quelle.
+  const quellen = normalizeBrief({
+    sources: [
+      { title: "Ohne", url: "irgendwas" },
+      { title: "Reuters", url: "https://reuters.com/x" },
+      { title: "Leer" },
+    ],
+  }).sources;
+  ok("Quellen ohne http-Adresse fallen raus",
+     quellen.length === 1 && quellen[0].url === "https://reuters.com/x", JSON.stringify(quellen));
+
+  // Unbekannte Haltung wird nicht durchgereicht.
+  ok("Unbekannte stance wird zu \"gemischt\"", normalizeBrief({ stance: "euphorisch" }).stance === "gemischt");
+  ok("Bekannte stance bleibt", normalizeBrief({ stance: "risk_off" }).stance === "risk_off");
+
+  // Kein lesbares JSON: der Rohtext bleibt erhalten statt spurlos zu verschwinden.
+  const roh = parseBrief("Dazu kann ich nichts sagen.");
+  ok("Unlesbare Antwort behaelt den Rohtext",
+     roh.summary.length === 1 && roh.summary[0].includes("Dazu kann ich"), JSON.stringify(roh.summary));
+  ok("Unlesbare Antwort hat trotzdem leere Listen", Array.isArray(roh.calendar) && roh.calendar.length === 0);
+}
+
+// ── 19. Marktbrief — Feed schlaegt Recherche ─────────────────────────────────
+section("Marktbrief — Herkunft der Zahlen");
+{
+  const feedQuote = (name: string, level: string): FeedQuote => ({
+    name, symbol: `${name}.INDX`, kind: "index", level, change_pct: "+0,84",
+    at: "17:35", raw: { level: 0, changePct: 0.84 },
+  });
+  const feed: BriefFeed = {
+    markets: [feedQuote("DAX", "24.310,55")], macro: [], watchlist: [],
+  };
+
+  // Nennt das Modell denselben Wert noch einmal, gewinnt der Feed: er traegt
+  // einen Zeitstempel, die Recherche nicht.
+  const b = normalizeBrief({
+    markets: [
+      { name: "DAX", level: "23.000,00", change_pct: "-9,99" },
+      { name: "MDAX", level: "28.100,00", change_pct: "+0,20" },
+    ],
+  }, feed);
+
+  ok("Feed-Stand steht vorn", b.markets[0].name === "DAX" && b.markets[0].src === "feed");
+  ok("Feed-Stand ueberschreibt den recherchierten",
+     b.markets[0].level === "24.310,55", b.markets[0].level);
+  ok("Feed-Stand traegt eine Uhrzeit", b.markets[0].at === "17:35", String(b.markets[0].at));
+  ok("Kein Doppeleintrag fuer denselben Namen",
+     b.markets.filter((q) => q.name === "DAX").length === 1);
+  ok("Recherchiertes ohne Feed bleibt, aber markiert",
+     b.markets[1]?.name === "MDAX" && b.markets[1].src === "recherche" && !b.markets[1].at);
+}
+
+// ── 20. Kursfeed — was eine Zeile zu einem Stand macht ───────────────────────
+section("Kursfeed fuer den Marktbrief");
+{
+  const ref = { name: "DAX", symbol: "GDAXI.INDX", kind: "index" as const };
+
+  const q = quoteFrom(ref, { close: 24310.55, previousClose: 24107.4, timestamp: 1757260500 }, "Europe/Berlin");
+  ok("Stand wird deutsch formatiert", q?.level === "24.310,55", String(q?.level));
+  ok("Veraenderung aus dem Vortagesschluss gerechnet",
+     q?.change_pct === "+0,84", String(q?.change_pct));
+  ok("Zeitstempel wird uebernommen", /^\d{2}:\d{2}$/.test(q?.at ?? ""), String(q?.at));
+
+  // EODHD liefert Fehlendes als "NA", nicht als null.
+  ok("Ohne Stand kein Eintrag", quoteFrom(ref, { close: "NA", previousClose: 1 }, "Europe/Berlin") === null);
+  ok("Leere Antwort ergibt keinen Eintrag", quoteFrom(ref, null, "Europe/Berlin") === null);
+
+  // change_p hat Vorrang vor der eigenen Rechnung.
+  ok("Geliefertes change_p gewinnt",
+     quoteFrom(ref, { close: 100, previousClose: 50, change_p: -1.5 }, "Europe/Berlin")?.change_pct === "-1,50");
+
+  // Ein Niveau ohne Vergleichswert ist immer noch ein Niveau.
+  const ohne = quoteFrom(ref, { close: 100 }, "Europe/Berlin");
+  ok("Stand ohne Veraenderung bleibt erhalten",
+     ohne?.level === "100,00" && ohne?.change_pct === "k. A.", JSON.stringify(ohne));
+  ok("Ohne Zeitstempel bleibt die Uhrzeit leer", ohne?.at === "", String(ohne?.at));
+  ok("stampAt schluckt Unsinn", stampAt("NA", "Europe/Berlin") === "" && stampAt(0, "Europe/Berlin") === "");
+
+  // Gattung aus dem Symbol — davon haengen die Nachkommastellen ab.
+  ok("Index wird als Index erkannt", refFromTicker("^GDAXI")?.kind === "index");
+  ok("Devisenpaar wird erkannt", refFromTicker("EURUSD=X")?.kind === "fx");
+  ok("Krypto wird erkannt", refFromTicker("BTC-USD")?.kind === "crypto");
+  ok("Aktie ist der Normalfall", refFromTicker("SAP.DE")?.kind === "equity");
+  ok("Terminkontrakte fuehrt der Feed nicht", refFromTicker("ES=F") === null);
+  // Vier Nachkommastellen bei Devisen — bei zwei waere die Bewegung unsichtbar.
+  ok("Devisen mit vier Stellen",
+     quoteFrom(refFromTicker("EURUSD=X")!, { close: 1.08423, previousClose: 1.08423 }, "Europe/Berlin")?.level
+       === "1,0842");
+
+  // Die Zeilen, die dem Modell als feststehend vorgelegt werden.
+  const zeile = feedFacts([{
+    name: "DAX", symbol: "GDAXI.INDX", kind: "index", level: "24.310,55",
+    change_pct: "+0,84", at: "17:35", raw: { level: 24310.55, changePct: 0.84 },
+  }]);
+  ok("Feed-Fakten nennen Stand, Veraenderung und Uhrzeit",
+     zeile.includes("24.310,55") && zeile.includes("+0,84") && zeile.includes("17:35"), zeile);
 }
 
 // ── Ergebnis ─────────────────────────────────────────────────────────────────

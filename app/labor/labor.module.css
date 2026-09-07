@@ -344,6 +344,23 @@
 .slot { font: 500 9.5px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
 .ename { font-weight: 500; }
 
+/*
+ * Herkunft einer Zahl. Ein Feed-Stand trägt eine Uhrzeit und ist prüfbar;
+ * ein recherchierter nicht. Der Unterschied gehört sichtbar an die Zahl —
+ * unauffällig, aber ablesbar.
+ */
+.srcRow { display: flex; gap: 6px; align-items: baseline; font-size: 10.5px; }
+.srcFeed { font-family: var(--mono); color: var(--faint); }
+.srcWeb {
+  font: 500 8.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--dim); border: 1px solid var(--line); border-radius: 3px; padding: 3px 5px;
+}
+.briefBar {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line);
+}
+.briefBar .note { margin: 0; }
+
 @media (max-width: 720px) {
   .shell {
     padding: 0 max(14px, env(safe-area-inset-right)) calc(64px + env(safe-area-inset-bottom))
