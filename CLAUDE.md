@@ -137,9 +137,23 @@ Stunden Zwischenspeicher, auch für Fehlversuche, und Nicht-US-Kürzel werden ga
 nicht erst angefragt. Der Zwischenspeicher lebt im Prozess, überlebt auf Vercel
 also keinen Kaltstart — er dämpft, er garantiert nichts.
 
-### Web-Recherche für Geschäftsbeziehungen
+### Web-Recherche (Belegpflicht)
 
-`lib/quant/relations.ts` lässt Claude mit Websuche nachschlagen, wenn das Filing
+`lib/quant/research.ts` ist der gemeinsame Unterbau: Anthropic-API mit Websuche
+über rohes `fetch` (kein SDK — neue Abhängigkeit), JSON nachsichtig geschält,
+`validSource()` als Belegprüfung. Zwei Verbraucher:
+
+**`analystHouses.ts` — wer welches Kursziel nennt.** Die freien Quellen liefern
+nur Aggregate; die Zuordnung Haus → Ziel ist lizenzierte Research-Data. Zwei
+Fallen: **Währung je Eintrag** ist Pflicht (ein Ziel ohne Code wird verworfen,
+sonst stünde eine Euro-Zahl neben einem Dollar-Kurs), und **erst sortieren, dann
+je Haus deduplizieren** — andersherum bliebe die Einschätzung stehen, die die
+Antwort zufällig zuerst nannte, womöglich zwei Jahre alt.
+
+Im Chart werden nur Ziele als Linie gezeichnet, deren Währung zur Kursreihe
+passt; der Rest wird gezählt und benannt, nicht eingezeichnet.
+
+**`relations.ts` — Kunden und Lieferanten.** Lässt Claude mit Websuche nachschlagen, wenn das Filing
 keine Kunden oder Lieferanten nennt — bei Apple ist das der Normalfall, das
 10-K führt keinen einzigen Lieferanten namentlich. Zwei Regeln tragen das:
 

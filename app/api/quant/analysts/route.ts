@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { toEodhd } from "@/lib/quant/prices";
 import { avOverview, type AvRatings } from "@/lib/quant/alphavantage";
 import { usListing } from "@/lib/quant/listing";
+import { researchHouses, type AnalystHouse } from "@/lib/quant/analystHouses";
+import { metaFor } from "@/app/labor/symbols";
 
 export const runtime = "nodejs";
 
@@ -16,6 +18,10 @@ export const runtime = "nodejs";
  * Reihenfolge: EODHD (falls die Fundamentaldaten im Tarif sind), sonst Alpha
  * Vantage. Beides sind Veröffentlichungen Dritter — EQUILUX gibt kein eigenes
  * Kursziel ab und mittelt die Urteile nicht zu einer Note.
+ *
+ * Welches Haus welches Ziel nennt, liefern die freien Quellen nicht — das ist
+ * lizenzierte Research-Data. Diese Einzelangaben werden deshalb recherchiert
+ * (`analystHouses.ts`), mit Belegpflicht je Eintrag.
  *
  * Für europäische Notierungen wird auf die US-Zweitnotierung ausgewichen
  * (SAP.DE → SAP): Analystenhäuser veröffentlichen ihre Ziele ohnehin je
@@ -123,5 +129,12 @@ export async function GET(req: Request) {
     if (pt) data.price = await lastPrice(pt, key);
   }
 
-  return NextResponse.json({ ok: true, symbol, analysts: data, note });
+  // Wer genau hinter den Zahlen steht: eigene Recherche, eigener Hinweis.
+  const research = await researchHouses(symbol, metaFor(symbol).name)
+    .catch(() => ({ houses: [] as AnalystHouse[], note: "Recherche fehlgeschlagen." }));
+
+  return NextResponse.json({
+    ok: true, symbol, analysts: data, note,
+    houses: research.houses, housesNote: research.note,
+  });
 }

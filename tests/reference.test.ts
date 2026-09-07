@@ -21,6 +21,7 @@ import { parseOverview, toAlphaVantage } from "@/lib/quant/alphavantage";
 import { env, envAny, missingEnvHint, resetEnvCache } from "@/lib/quant/env";
 import { parseRelations } from "@/lib/quant/relations";
 import { usListing } from "@/lib/quant/listing";
+import { cleanHouse, parseHouses } from "@/lib/quant/analystHouses";
 
 // ── Mini-Harness ─────────────────────────────────────────────────────────────
 let passed = 0;
@@ -434,6 +435,44 @@ section("Analystenquelle — Handelsplatz aufloesen");
   ok("Ohne Zweitnotierung kein Ausweichen", usListing("MUV2.DE") === "MURGY" || usListing("XYZ.DE") === null,
      String(usListing("XYZ.DE")));
   ok("Index hat keine Notierung", usListing("^GDAXI") === null, String(usListing("^GDAXI")));
+}
+
+// ── 17. Einschaetzungen je Haus — Belegpflicht und Waehrung ─────────────────
+section("Analystenhaeuser — was durchkommt und was nicht");
+{
+  const antwort = `{"houses": [
+    { "house": "Morgan Stanley", "rating": "Equal-weight", "target": 240, "currency": "EUR",
+      "date": "2024-01-02", "source": "https://example.com/alt" },
+    { "house": "Goldman Sachs", "rating": "Buy", "target": 310, "currency": "EUR",
+      "date": "2026-09-02", "source": "https://example.com/gs" },
+    { "house": "Ohne Beleg AG", "target": 999, "currency": "EUR", "date": "2026-09-01" },
+    { "house": "Ohne Waehrung AG", "target": 250, "date": "2026-09-01", "source": "https://example.com/x" },
+    { "house": "Morgan Stanley", "rating": "Overweight", "target": 290, "currency": "EUR",
+      "date": "2026-08-14", "source": "https://example.com/ms" }
+  ]}`;
+  const r = parseHouses(antwort);
+
+  ok("Nur belegte Haeuser", r.houses.every((h) => /^https?:\/\//.test(h.source)), JSON.stringify(r.houses));
+  ok("Ohne Beleg faellt raus", !r.houses.some((h) => h.house === "Ohne Beleg AG"));
+  ok("Juengstes zuerst", r.houses[0]?.house === "Goldman Sachs", String(r.houses[0]?.house));
+  ok("Je Haus nur die juengste Einschaetzung",
+     r.houses.filter((h) => h.house === "Morgan Stanley").length === 1);
+  ok("Aeltere Einschaetzung desselben Hauses verworfen",
+     r.houses.find((h) => h.house === "Morgan Stanley")?.target === 290,
+     String(r.houses.find((h) => h.house === "Morgan Stanley")?.target));
+
+  // Ein Kursziel ohne Waehrung laesst sich weder vergleichen noch zeichnen —
+  // der Eintrag bleibt, die Zahl nicht.
+  const ohne = r.houses.find((h) => h.house === "Ohne Waehrung AG");
+  ok("Kursziel ohne Waehrung wird verworfen", !!ohne && ohne.target === undefined, JSON.stringify(ohne));
+
+  // Waehrung nur als sauberer Code.
+  ok("\"Euro\" ist kein Waehrungscode",
+     cleanHouse({ house: "X AG", target: 10, currency: "Euro", source: "https://e.de/1" })?.target === undefined);
+
+  // Unlesbare Antwort ergibt eine leere Liste mit Begruendung.
+  const kaputt = parseHouses("Dazu habe ich nichts gefunden.");
+  ok("Unlesbare Antwort ergibt leere Liste", kaputt.houses.length === 0 && !!kaputt.note, String(kaputt.note));
 }
 
 // ── Ergebnis ─────────────────────────────────────────────────────────────────

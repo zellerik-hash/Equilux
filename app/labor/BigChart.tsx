@@ -12,6 +12,9 @@ interface Legend { o?: number; h?: number; l?: number; c?: number; v?: number; }
 
 export interface Ohlc { t?: number; o: number; h: number; l: number; c: number; v?: number; }
 
+/** Waagerechte Marke auf der Preisachse — etwa ein Kursziel samt Haus. */
+export interface Level { price: number; title: string; color?: string; }
+
 /** TradingView-Kerzenfarben. */
 const UP = "#26a69a";
 const DOWN = "#ef5350";
@@ -148,6 +151,7 @@ export default function BigChart({
   indicators = [],
   currency = "EUR",
   intraday = false,
+  levels = [],
 }: {
   data: number[];
   candles?: Ohlc[];
@@ -159,6 +163,8 @@ export default function BigChart({
   indicators?: string[];
   currency?: string;
   intraday?: boolean;
+  /** Waagerechte Marken auf der Preisachse (z. B. Kursziele). */
+  levels?: Level[];
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -299,6 +305,19 @@ export default function BigChart({
       seriesRef.current.push(hist, ml, sl);
     }
 
+    // Waagerechte Marken auf der Preisskala der Hauptreihe.
+    for (const lv of levels) {
+      if (!Number.isFinite(lv.price) || lv.price <= 0) continue;
+      mainSeries.createPriceLine({
+        price: lv.price,
+        color: lv.color ?? accent,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: lv.title,
+      });
+    }
+
     chart.timeScale().fitContent();
 
     // Werteanzeige (O/H/L/C bzw. Kurs) — Standard: letzte Kerze, sonst am Fadenkreuz.
@@ -326,7 +345,7 @@ export default function BigChart({
 
     return () => { ro.disconnect(); chart.remove(); chartRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVolume, mas.join(","), maType, indicators.join(","), currency, intraday, digits, t, dataSig(data), candleSig(candles), themeTick]);
+  }, [showVolume, mas.join(","), maType, indicators.join(","), currency, intraday, digits, levelSig(levels), t, dataSig(data), candleSig(candles), themeTick]);
 
   const m = (v?: number) => (v == null ? "—" : money(v, currency, digits));
   const cUp = legend && legend.o != null && legend.c != null ? legend.c >= legend.o : true;
@@ -382,6 +401,9 @@ function hexA(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function levelSig(levels: Level[]): string {
+  return levels.map((l) => `${l.title}:${l.price}`).join("|");
+}
 function dataSig(data: number[]): string {
   return `${data.length}:${data[0] ?? ""}:${data[data.length - 1] ?? ""}`;
 }

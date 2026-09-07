@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import s from "./company.module.css";
 import NetworkGraph, { type NetNode } from "./NetworkGraph";
+import BigChart, { type Level, type Ohlc } from "./BigChart";
 import Logo from "./Logo";
 import { metaFor } from "./symbols";
 import { de, money, pct, pctPlain } from "@/lib/quant/num";
@@ -48,6 +49,18 @@ interface Analysts {
   source: "EODHD" | "Alpha Vantage";
 }
 
+/** Einschätzung eines einzelnen Hauses — recherchiert, mit Beleg. */
+interface House {
+  house: string;
+  rating?: string;
+  target?: number;
+  currency?: string;
+  date?: string;
+  source: string;
+}
+
+interface Series { closes: number[]; ohlc: Ohlc[]; t: number[]; currency: string }
+
 type Tab = "netz" | "news" | "analysten";
 
 export default function CompanyPanel({ symbol }: { symbol: string }) {
@@ -58,7 +71,8 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
   // Eigener Abruf, absichtlich erst beim Öffnen des Reiters: das Tageskontingent
   // der freien Analystenquelle ist knapp und soll nicht bei jedem Seitenaufruf
   // verbraucht werden.
-  const [ana, setAna] = useState<{ data: Analysts | null; note?: string } | null>(null);
+  const [ana, setAna] = useState<{ data: Analysts | null; note?: string; houses: House[]; housesNote?: string } | null>(null);
+  const [series, setSeries] = useState<Series | null>(null);
   const [anaBusy, setAnaBusy] = useState(false);
   // Merker als Ref, nicht als State: stünde er in den Abhängigkeiten des
   // Effekts, würde sein Setzen den Effekt neu auslösen, dessen Aufräumen die
@@ -77,7 +91,21 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
     return () => { alive = false; };
   }, [symbol]);
 
-  useEffect(() => { setAna(null); anaFor.current = null; }, [symbol]);
+  useEffect(() => { setAna(null); setSeries(null); anaFor.current = null; }, [symbol]);
+
+  // Kursverlauf für den Reiter — die Ziele sollen im Chart stehen, nicht nur
+  // als Zahl daneben. Tageskerzen genügen dafür.
+  useEffect(() => {
+    if (tab !== "analysten" || series) return;
+    let alive = true;
+    fetch(`/api/quant/series?symbol=${encodeURIComponent(symbol)}&days=400&period=d`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (alive && j.ok) setSeries({ closes: j.data.closes, ohlc: j.data.ohlc, t: j.data.t, currency: j.data.currency });
+      })
+      .catch(() => { /* ohne Chart bleibt die Liste */ });
+    return () => { alive = false; };
+  }, [tab, symbol, series]);
 
   useEffect(() => {
     if (tab !== "analysten" || anaFor.current === symbol) return;
@@ -87,8 +115,8 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
     setAnaBusy(true);
     fetch(`/api/quant/analysts?symbol=${encodeURIComponent(symbol)}`)
       .then((r) => r.json())
-      .then((j) => { settled = true; if (alive) setAna({ data: j.analysts ?? null, note: j.note }); })
-      .catch(() => { settled = true; if (alive) setAna({ data: null, note: "Keine Verbindung zur Analystenquelle." }); })
+      .then((j) => { settled = true; if (alive) setAna({ data: j.analysts ?? null, note: j.note, houses: j.houses ?? [], housesNote: j.housesNote }); })
+      .catch(() => { settled = true; if (alive) setAna({ data: null, note: "Keine Verbindung zur Analystenquelle.", houses: [] }); })
       .finally(() => { if (alive) setAnaBusy(false); });
     return () => {
       alive = false;
@@ -204,7 +232,7 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
       {tab === "analysten" && (
         anaBusy || !ana
           ? <p className={s.state}>lädt Analystenurteile …</p>
-          : <AnalystView a={ana.data} note={ana.note} />
+          : <AnalystView a={ana.data} note={ana.note} houses={ana.houses} housesNote={ana.housesNote} series={series} />
       )}
     </section>
   );
@@ -219,28 +247,45 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
  * sagen und vier halten, ist eine Tatsache — daraus eine Note zu mitteln wäre
  * schon eine Wertung.
  */
-function AnalystView({ a, note }: { a: Analysts | null; note?: string }) {
-  if (!a) {
+function AnalystView({
+  a, note, houses, housesNote, series,
+}: {
+  a: Analysts | null; note?: string;
+  houses: House[]; housesNote?: string;
+  series: Series | null;
+}) {
+  if (!a && houses.length === 0) {
     return (
       <div className={s.analyst}>
         <p className={s.warn}>{note ?? "Keine Analystendaten verfügbar."}</p>
+        {housesNote && <p className={s.warn}>{housesNote}</p>}
         <p className={s.note}>
           Analystenurteile und Kursziele sind — anders als Kurse oder Beteiligungsmeldungen —
           keine öffentlichen Daten, sondern lizenzierte Bankresearch-Auswertungen. EQUILUX zieht
-          sie aus den EODHD-Fundamentaldaten oder ersatzweise von Alpha Vantage; für Letzteres
-          genügt ein kostenloser Schlüssel.
+          die Aggregate aus den EODHD-Fundamentaldaten oder ersatzweise von Alpha Vantage (dafür
+          genügt ein kostenloser Schlüssel); wer hinter welcher Zahl steht, wird über die
+          Web-Recherche mit Beleg zusammengetragen und braucht <b>ANTHROPIC_API_KEY</b>.
         </p>
       </div>
     );
   }
 
-  const r = a.ratings;
+  const r = a?.ratings ?? null;
   const total = r ? r.strongBuy + r.buy + r.hold + r.sell + r.strongSell : 0;
   const kaufen = r ? r.strongBuy + r.buy : 0;
   const halten = r ? r.hold : 0;
   const verkaufen = r ? r.sell + r.strongSell : 0;
-  const cur = a.currency ?? "USD";
-  const gap = a.target != null && a.price != null && a.price > 0 ? (a.target - a.price) / a.price : null;
+  const cur = a?.currency ?? "USD";
+  const gap = a?.target != null && a.price != null && a.price > 0 ? (a.target - a.price) / a.price : null;
+
+  // Ziele nur zeichnen, wenn ihre Währung zur Kursreihe passt. Ein Ziel in
+  // Dollar auf einem Euro-Chart wäre eine Linie an einer frei erfundenen Stelle.
+  const chartCur = series?.currency ?? "";
+  const levels: Level[] = houses
+    .filter((h) => h.target != null && h.currency === chartCur)
+    .slice(0, 6)
+    .map((h) => ({ price: h.target as number, title: h.house.slice(0, 18) }));
+  const skipped = houses.filter((h) => h.target != null && h.currency !== chartCur).length;
 
   return (
     <div className={s.analyst}>
@@ -251,25 +296,67 @@ function AnalystView({ a, note }: { a: Analysts | null; note?: string }) {
         keine Prognose.
       </p>
 
-      <div className={s.aGrid}>
-        <div className={s.aCard}>
-          <span className={s.aLabel}>Median-Kursziel</span>
-          <span className={s.aValue}>{a.target != null ? money(a.target, cur) : "k. A."}</span>
-          {a.price != null && <span className={s.aSub}>aktuell {money(a.price, cur)}</span>}
+      {a && (
+        <div className={s.aGrid}>
+          <div className={s.aCard}>
+            <span className={s.aLabel}>Median-Kursziel</span>
+            <span className={s.aValue}>{a.target != null ? money(a.target, cur) : "k. A."}</span>
+            {a.price != null && <span className={s.aSub}>aktuell {money(a.price, cur)}</span>}
+          </div>
+          <div className={s.aCard}>
+            <span className={s.aLabel}>Abstand zum Kurs</span>
+            <span className={s.aValue} style={{ color: gap == null ? undefined : gap >= 0 ? "var(--up)" : "var(--down)" }}>
+              {gap == null ? "k. A." : pct(gap, 1)}
+            </span>
+            <span className={s.aSub}>keine Renditeerwartung</span>
+          </div>
+          <div className={s.aCard}>
+            <span className={s.aLabel}>Auswertende Häuser</span>
+            <span className={s.aValue}>{total > 0 ? de(total, 0) : "k. A."}</span>
+            <span className={s.aSub}>Quelle: {a.source}</span>
+          </div>
         </div>
-        <div className={s.aCard}>
-          <span className={s.aLabel}>Abstand zum Kurs</span>
-          <span className={s.aValue} style={{ color: gap == null ? undefined : gap >= 0 ? "var(--up)" : "var(--down)" }}>
-            {gap == null ? "k. A." : pct(gap, 1)}
-          </span>
-          <span className={s.aSub}>keine Renditeerwartung</span>
+      )}
+      {note && <p className={s.note}>{note}</p>}
+
+      {/* Die Ziele dort, wo sie hingehören: am Kurs. */}
+      {series && series.closes.length > 1 && (
+        <>
+          <div className={s.aChart}>
+            <BigChart
+              data={series.closes}
+              candles={series.ohlc}
+              times={series.t}
+              currency={series.currency}
+              mas={[]}
+              levels={levels}
+            />
+          </div>
+          <p className={s.aChartNote}>
+            {levels.length > 0
+              ? <>Gestrichelt: die Kursziele der einzelnen Häuser, beschriftet an der Preisachse.</>
+              : <>Keine Kursziele im Chart — es liegt keines in der Währung dieser Notierung ({series.currency}) vor.</>}
+            {skipped > 0 && <> {skipped} Ziel(e) in anderer Währung sind bewusst nicht eingezeichnet.</>}
+          </p>
+        </>
+      )}
+
+      {houses.length > 0 && (
+        <div className={s.aHouses}>
+          <span className={s.aLabel}>Wer was sagt</span>
+          {houses.map((h, i) => (
+            <a key={`${h.house}#${i}`} className={s.aHouse} href={h.source} target="_blank" rel="noopener noreferrer">
+              <span className={s.aHouseName}>{h.house}</span>
+              <span className={s.aHouseRating}>{h.rating ?? "—"}</span>
+              <span className={s.aHouseTarget}>
+                {h.target != null && h.currency ? money(h.target, h.currency) : "kein Ziel"}
+              </span>
+              <span className={s.aHouseDate}>{h.date ?? ""}</span>
+            </a>
+          ))}
         </div>
-        <div className={s.aCard}>
-          <span className={s.aLabel}>Auswertende Häuser</span>
-          <span className={s.aValue}>{total > 0 ? de(total, 0) : "k. A."}</span>
-          <span className={s.aSub}>Quelle: {a.source}</span>
-        </div>
-      </div>
+      )}
+      {housesNote && <p className={s.warn}>{housesNote}</p>}
 
       {total > 0 && (
         <div className={s.aDist}>
@@ -290,7 +377,8 @@ function AnalystView({ a, note }: { a: Analysts | null; note?: string }) {
         Die Verteilung fasst die fünf gemeldeten Stufen zusammen: „Kaufen" enthält Strong Buy und
         Buy, „Verkaufen" Sell und Strong Sell. Eine gemittelte Konsensnote steht bewusst nicht da —
         die Skalen der Häuser sind nicht einheitlich gerichtet, ein Mittelwert daraus wäre eine
-        Scheingenauigkeit.
+        Scheingenauigkeit. Die Einzelangaben je Haus sind <b>recherchiert</b>, nicht abgerufen —
+        wer welches Ziel nennt, liefert keine freie Datenquelle; jede Zeile verlinkt ihren Beleg.
       </p>
     </div>
   );
