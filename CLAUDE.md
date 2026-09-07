@@ -101,6 +101,7 @@ und wenn beides ausfällt, ein Satz der sagt **warum** — nie eine stille Lück
 | Block | Erst | Dann |
 |---|---|---|
 | Anteilseigner | EODHD Fundamentals | SEC SC 13D/G (nur > 5 %, nur US) |
+| Kunden/Lieferanten | SEC-Filing (10-K/20-F) | Web-Recherche mit Belegpflicht |
 | Kursziel/Analysten | EODHD AnalystRatings | Alpha Vantage `OVERVIEW` (nur US) |
 | Kennzahlen | EODHD Fundamentals | Alpha Vantage `OVERVIEW` |
 | Intraday | Twelve Data | EODHD (dort kostenpflichtig) |
@@ -128,6 +129,23 @@ Block im Unternehmens-Dossier, verbrauchte jeder Seitenaufruf eines. Dazu zwölf
 Stunden Zwischenspeicher, auch für Fehlversuche, und Nicht-US-Kürzel werden gar
 nicht erst angefragt. Der Zwischenspeicher lebt im Prozess, überlebt auf Vercel
 also keinen Kaltstart — er dämpft, er garantiert nichts.
+
+### Web-Recherche für Geschäftsbeziehungen
+
+`lib/quant/relations.ts` lässt Claude mit Websuche nachschlagen, wenn das Filing
+keine Kunden oder Lieferanten nennt — bei Apple ist das der Normalfall, das
+10-K führt keinen einzigen Lieferanten namentlich. Zwei Regeln tragen das:
+
+- **Belegpflicht.** Ohne `http(s)`-Quell-URL wird ein Eintrag verworfen, auch
+  wenn der Name stimmt. Eine kurze belegte Liste ist mehr wert als eine lange
+  geratene; das prüfen Tests.
+- **Rangfolge.** Was im Filing steht, bleibt primär. Recherchiertes füllt nur
+  leere Spalten und trägt in der Oberfläche die Marke „Web" mit Link zum Beleg.
+
+Kostet je neuem Titel einen Aufruf mit Websuche, deshalb sieben Tage
+Zwischenspeicher und `EQUILUX_RESEARCH=off` zum Abschalten. Die API wird über
+rohes `fetch` angesprochen wie im Marktbrief — kein SDK, weil das eine neue
+Abhängigkeit wäre.
 
 ## Grenzen / keine Anlageberatung
 

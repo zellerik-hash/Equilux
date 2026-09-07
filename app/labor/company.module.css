@@ -127,3 +127,19 @@
 @media (max-width: 720px) {
   .aGrid { grid-template-columns: 1fr; }
 }
+
+/* Herkunftsmarke: dieser Eintrag stammt aus der Web-Recherche, nicht aus dem Filing. */
+.badgeWeb {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font: 500 9.5px/1.5 var(--font-mono-stack);
+  letter-spacing: .06em;
+  color: var(--text-faint);
+  text-decoration: none;
+  vertical-align: 1px;
+  transition: color .15s var(--ease-out), border-color .15s var(--ease-out);
+}
+a.badgeWeb:hover { color: var(--accent); border-color: var(--accent); }

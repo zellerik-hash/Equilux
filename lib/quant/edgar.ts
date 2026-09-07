@@ -447,6 +447,8 @@ function tidyName(raw: string): string | null {
     .replace(/&(amp|nbsp|#\d+);/gi, " ")
     .replace(/\s+/g, " ")
     .replace(/^[\s.,;:*|-]+/, "")
+    // Zeilennummern des Deckblatts, die hinter dem Namen kleben: "BlackRock, Inc. (2)"
+    .replace(/\s*\(\s*\d{1,2}\s*\)\s*$/, "")
     // Punkt am Ende bleibt stehen: "BlackRock, Inc." ist ohne ihn falsch geschrieben.
     .replace(/[\s,;:*|-]+$/, "")
     .trim();
@@ -488,7 +490,11 @@ export function extractOwnership(raw: string): { name: string | null; share: num
 
   if (!name) {
     const m = text.match(
-      /NAMES?\s+OF\s+REPORTING\s+PERSONS?\.?\s*(?:I\.?\s?R\.?\s?S\.?[^%]{0,80}?(?:NO\.?|NUMBER)\s*)?([A-Z][A-Za-z0-9 .,&'()\/-]{2,60}?)(?=\s{2,}|\s+2\s|\s+CHECK|\s+SEC\s+USE|$)/i,
+      // Ende des Namens: die naechste nummerierte Zeile des Deckblatts, eine
+      // bekannte Beschriftung, oder zwei Leerzeichen. Zwei Leerzeichen allein
+      // reichen nicht — nach dem Strippen der Tags ist der Text auf einfache
+      // Abstaende normalisiert.
+      /NAMES?\s+OF\s+REPORTING\s+PERSONS?\.?\s*(?:I\.?\s?R\.?\s?S\.?[^%]{0,80}?(?:NO\.?|NUMBER)\s*)?([A-Z][A-Za-z0-9 .,&'()\/-]{2,60}?)(?=\s{2,}|\s+\(?\d{1,2}\)?\s+[A-Z]{3,}|\s+CHECK|\s+SEC\s+USE|\s+PERCENT\b|$)/i,
     );
     if (m) name = tidyName(stripLabels(m[1]));
   }

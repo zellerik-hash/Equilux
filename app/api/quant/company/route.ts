@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { toEodhd } from "@/lib/quant/prices";
 import { edgarRelations, edgarHolders } from "@/lib/quant/edgar";
+import { researchRelations } from "@/lib/quant/relations";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,11 @@ export const runtime = "nodejs";
  *   • customers  — wer die Produkte kauft (SEC-Filing, nur US-Titel)
  *   • suppliers  — von wem eingekauft wird (SEC-Filing, nur US-Titel)
  *
+ * Kunden und Lieferanten kommen zuerst aus dem Filing. Nennt es keine — bei
+ * Apple etwa steht kein einziger Lieferant im 10-K —, wird ergänzend im Web
+ * recherchiert, mit Belegpflicht je Eintrag. Die Herkunft steht an jedem
+ * Eintrag, damit Beleg und Recherche unterscheidbar bleiben.
+ *
  * Kursziele und Analystenurteile liegen bewusst NICHT hier, sondern in
  * `/api/quant/analysts`: das Tageskontingent der freien Quelle ist knapp, und
  * es soll nur zählen, wenn jemand den Reiter auch öffnet.
@@ -25,6 +31,9 @@ export const runtime = "nodejs";
 interface NewsItem { title: string; url: string; date: string; source?: string }
 /** `sec` kommt aus einer Beteiligungsmeldung über 5 %, nicht aus einem Datenvertrag. */
 interface Holder { name: string; share: number | null; kind: "institution" | "fonds" | "sec" }
+/** `filing` steht so im Geschäftsbericht, `recherche` stammt aus einer belegten Quelle. */
+type Origin = "filing" | "recherche";
+interface Party { name: string | null; share: number | null; context: string; origin: Origin; source?: string }
 interface Notes { news?: string; holders?: string; relations?: string }
 
 
@@ -145,9 +154,38 @@ export async function GET(req: Request) {
     }
   }
 
+  // Kunden und Lieferanten: Filing zuerst, Recherche füllt die Lücken.
+  let customers: Party[] = relations.customers.map((c) => ({
+    name: c.name, share: c.share, context: c.context, origin: "filing" as const,
+  }));
+  let suppliers: Party[] = relations.suppliers.map((x) => ({
+    name: x.name, share: null, context: x.context, origin: "filing" as const,
+  }));
+
+  if (customers.length === 0 || suppliers.length === 0) {
+    const name = holders.name ?? symbol;
+    const web = await researchRelations(symbol, name).catch(() => ({
+      suppliers: [], customers: [], note: "Recherche fehlgeschlagen.",
+    }));
+    const known = new Set([...customers, ...suppliers].map((p) => (p.name ?? "").toLowerCase()));
+    const add = (p: { name: string; role?: string; source?: string }): Party => ({
+      name: p.name, share: null, context: p.role ?? "", origin: "recherche", source: p.source,
+    });
+    if (customers.length === 0) {
+      customers = web.customers.filter((p) => !known.has(p.name.toLowerCase())).map(add);
+    }
+    if (suppliers.length === 0) {
+      suppliers = web.suppliers.filter((p) => !known.has(p.name.toLowerCase())).map(add);
+    }
+    if (customers.length === 0 && suppliers.length === 0 && web.note) {
+      notes.relations = `${relations.note ? relations.note + " " : ""}${web.note}`;
+    } else if (relations.note && (customers.length === 0 || suppliers.length === 0)) {
+      notes.relations = relations.note;
+    }
+  }
+
   if (news.note) notes.news = news.note;
   if (holderNote) notes.holders = holderNote;
-  if (relations.note) notes.relations = relations.note;
 
   return NextResponse.json({
     ok: true,
@@ -156,8 +194,8 @@ export async function GET(req: Request) {
     news: news.items,
     holders: holderItems,
     holderSource,
-    customers: relations.customers,
-    suppliers: relations.suppliers,
+    customers,
+    suppliers,
     filing: relations.available ? { form: relations.form, filed: relations.filed, url: relations.url } : null,
     notes,
   });

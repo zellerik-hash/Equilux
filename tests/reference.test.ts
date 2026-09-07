@@ -19,6 +19,7 @@ import { rsi, atr, sma, risk, type Candle } from "@/lib/quant/indicators";
 import { extractOwnership } from "@/lib/quant/edgar";
 import { parseOverview, toAlphaVantage } from "@/lib/quant/alphavantage";
 import { env, envAny, missingEnvHint, resetEnvCache } from "@/lib/quant/env";
+import { parseRelations } from "@/lib/quant/relations";
 
 // ── Mini-Harness ─────────────────────────────────────────────────────────────
 let passed = 0;
@@ -380,6 +381,47 @@ section("Umgebungsvariablen — Schreibweise und Vertipper");
   for (const k of Object.keys(process.env)) if (/^(ALPHAVANTAGE|SEC)/i.test(k)) delete process.env[k];
   Object.assign(process.env, sicherung);
   resetEnvCache();
+}
+
+// ── 15. Recherchierte Geschaeftsbeziehungen — Belegpflicht ───────────────────
+section("Web-Recherche — nur belegte Namen zaehlen");
+{
+  const antwort = [
+    "Hier das Ergebnis:",
+    "```json",
+    '{ "suppliers": [',
+    '  { "name": "TSMC", "role": "Auftragsfertiger", "source": "https://example.com/a" },',
+    '  { "name": "Foxconn", "role": "Endmontage" },',
+    '  { "name": "Corning", "role": "Deckglas", "source": "nicht gefunden" },',
+    '  { "name": "", "role": "leer", "source": "https://example.com/b" }',
+    '], "customers": [',
+    '  { "name": "Best Buy", "role": "Einzelhandel", "source": "https://example.com/c" }',
+    "] }",
+    "```",
+  ].join("\n");
+
+  const r = parseRelations(antwort);
+  ok("Belegter Lieferant kommt durch", r.suppliers.length === 1 && r.suppliers[0].name === "TSMC",
+     JSON.stringify(r.suppliers));
+  ok("Ohne Quelle faellt der Eintrag raus", !r.suppliers.some((x) => x.name === "Foxconn"));
+  ok("Quelle muss eine URL sein", !r.suppliers.some((x) => x.name === "Corning"));
+  ok("Kunde mit Beleg kommt durch", r.customers.length === 1 && r.customers[0].name === "Best Buy",
+     JSON.stringify(r.customers));
+
+  // Prosa um das JSON herum darf nicht stoeren — dasselbe Verhalten wie beim Marktbrief.
+  const roh = parseRelations(
+    'Ich habe recherchiert. {"suppliers":[{"name":"ASML","source":"https://x.de/1"}],"customers":[]} Ende.');
+  ok("JSON aus Prosa geschaelt", roh.suppliers.length === 1 && roh.suppliers[0].name === "ASML",
+     JSON.stringify(roh.suppliers));
+
+  // Unlesbare Antwort ergibt leere Listen mit Begruendung, nicht einen Absturz.
+  const kaputt = parseRelations("Dazu konnte ich nichts finden.");
+  ok("Unlesbare Antwort ergibt leere Listen", kaputt.suppliers.length === 0 && !!kaputt.note, String(kaputt.note));
+
+  // Zeilennummer des SEC-Deckblatts darf nicht am Namen kleben.
+  const bl = extractOwnership(
+    "NAME OF REPORTING PERSON  BlackRock, Inc. (2)   PERCENT OF CLASS REPRESENTED BY AMOUNT IN ROW (11) 6.7%");
+  ok("Zeilennummer wird vom Namen getrennt", bl.name === "BlackRock, Inc.", String(bl.name));
 }
 
 // ── Ergebnis ─────────────────────────────────────────────────────────────────

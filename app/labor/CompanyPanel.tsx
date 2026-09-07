@@ -18,15 +18,16 @@ import { de, money, pct, pctPlain } from "@/lib/quant/num";
  */
 interface NewsItem { title: string; url: string; date: string; source?: string }
 interface Holder { name: string; share: number | null; kind: "institution" | "fonds" | "sec" }
-interface Customer { name: string | null; share: number | null; context: string }
-interface Supplier { name: string; context: string }
+/** `filing` steht so im Geschäftsbericht, `recherche` stammt aus einer belegten Quelle. */
+type Origin = "filing" | "recherche";
+interface Party { name: string | null; share: number | null; context: string; origin: Origin; source?: string }
 interface Dossier {
   symbol: string;
   name: string | null;
   news: NewsItem[];
   holders: Holder[];
-  customers: Customer[];
-  suppliers: Supplier[];
+  customers: Party[];
+  suppliers: Party[];
   holderSource: "EODHD" | "SEC" | null;
   filing: { form: string | null; filed: string | null; url: string | null } | null;
   notes: { news?: string; holders?: string; relations?: string };
@@ -90,7 +91,7 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
   const holders: NetNode[] = (data?.holders ?? []).map((h) => ({ name: h.name, share: h.share }));
   const customers: NetNode[] = (data?.customers ?? [])
     .map((c) => ({ name: c.name ?? "ohne Namensnennung", share: c.share }));
-  const suppliers: NetNode[] = (data?.suppliers ?? []).map((x) => ({ name: x.name }));
+  const suppliers: NetNode[] = (data?.suppliers ?? []).map((x) => ({ name: x.name ?? "ohne Namensnennung" }));
 
   return (
     <section className={s.panel}>
@@ -146,17 +147,13 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
               title="Lieferanten"
               color="var(--gold)"
               note={data.notes.relations}
-              rows={data.suppliers.map((x, i) => ({ key: `${x.name}#${i}`, main: x.name, sub: x.context.slice(0, 120) + " …" }))}
+              rows={data.suppliers.map(partyRow)}
             />
             <Column
               title="Kunden"
               color="var(--up)"
               note={data.notes.relations}
-              rows={data.customers.map((c, i) => ({
-                key: `${c.name ?? "anon"}${i}`,
-                main: c.name ?? "ohne Namensnennung",
-                sub: c.share != null ? `${pctPlain(c.share, 1)} vom Umsatz` : c.context.slice(0, 120) + " …",
-              }))}
+              rows={data.customers.map(partyRow)}
             />
           </div>
 
@@ -171,8 +168,10 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
                 {data.filing.form}{data.filing.filed ? ` vom ${data.filing.filed}` : ""}
               </a>)</>
             )}. Das Netz ist deshalb <b>unvollständig</b>: genannt wird nur, was das Unternehmen selbst
-            für erwähnenswert hielt — meist wegen Klumpenrisiken. Für Titel ohne SEC-Filing
-            (z. B. Xetra-Notierungen) bleiben Kunden und Lieferanten leer.
+            für erwähnenswert hielt — meist wegen Klumpenrisiken. Nennt der Bericht keine
+            (Apples 10-K etwa führt keinen einzigen Lieferanten namentlich), wird ergänzend im Web
+            recherchiert; solche Einträge sind mit <span className={s.badgeWeb}>Web</span> markiert
+            und verlinken den Beleg. Beides bleibt <b>unvollständig</b> — es ist kein Einkaufsregister.
           </p>
         </>
       )}
@@ -285,11 +284,27 @@ function AnalystView({ a, note }: { a: Analysts | null; note?: string }) {
   );
 }
 
+/** Eine Zeile für Kunden/Lieferanten samt Herkunft und Beleg. */
+function partyRow(p: Party, i: number): Row {
+  const name = p.name ?? "ohne Namensnennung";
+  return {
+    key: `${name}#${i}`,
+    main: name,
+    sub: p.share != null
+      ? `${pctPlain(p.share, 1)} vom Umsatz`
+      : p.context ? p.context.slice(0, 120) + (p.context.length > 120 ? " …" : "") : undefined,
+    web: p.origin === "recherche",
+    source: p.source,
+  };
+}
+
+interface Row { key: string; main: string; sub?: string; web?: boolean; source?: string }
+
 function Column({
   title, color, rows, note,
 }: {
   title: string; color: string; note?: string;
-  rows: { key: string; main: string; sub?: string }[];
+  rows: Row[];
 }) {
   return (
     <div className={s.col}>
@@ -303,7 +318,14 @@ function Column({
       ) : (
         rows.slice(0, 10).map((r) => (
           <div key={r.key} className={s.row}>
-            <span className={s.rowMain}>{r.main}</span>
+            <span className={s.rowMain}>
+              {r.main}
+              {r.web && (
+                r.source
+                  ? <a className={s.badgeWeb} href={r.source} target="_blank" rel="noopener noreferrer" title="Beleg öffnen">Web</a>
+                  : <span className={s.badgeWeb}>Web</span>
+              )}
+            </span>
             {r.sub && <span className={s.rowSub}>{r.sub}</span>}
           </div>
         ))
