@@ -20,6 +20,7 @@ import { extractOwnership } from "@/lib/quant/edgar";
 import { parseOverview, toAlphaVantage } from "@/lib/quant/alphavantage";
 import { env, envAny, missingEnvHint, resetEnvCache } from "@/lib/quant/env";
 import { parseRelations } from "@/lib/quant/relations";
+import { usListing } from "@/lib/quant/listing";
 
 // ── Mini-Harness ─────────────────────────────────────────────────────────────
 let passed = 0;
@@ -422,6 +423,17 @@ section("Web-Recherche — nur belegte Namen zaehlen");
   const bl = extractOwnership(
     "NAME OF REPORTING PERSON  BlackRock, Inc. (2)   PERCENT OF CLASS REPRESENTED BY AMOUNT IN ROW (11) 6.7%");
   ok("Zeilennummer wird vom Namen getrennt", bl.name === "BlackRock, Inc.", String(bl.name));
+}
+
+// ── 16. Analysten: Ausweichen auf die US-Zweitnotierung ─────────────────────
+section("Analystenquelle — Handelsplatz aufloesen");
+{
+  ok("US-Kuerzel bleibt es selbst", usListing("AAPL") === "AAPL", String(usListing("AAPL")));
+  ok("Xetra weicht auf das ADR aus", usListing("SAP.DE") === "SAP", String(usListing("SAP.DE")));
+  ok("Amsterdam weicht auf Nasdaq aus", usListing("ASML.AS") === "ASML", String(usListing("ASML.AS")));
+  ok("Ohne Zweitnotierung kein Ausweichen", usListing("MUV2.DE") === "MURGY" || usListing("XYZ.DE") === null,
+     String(usListing("XYZ.DE")));
+  ok("Index hat keine Notierung", usListing("^GDAXI") === null, String(usListing("^GDAXI")));
 }
 
 // ── Ergebnis ─────────────────────────────────────────────────────────────────

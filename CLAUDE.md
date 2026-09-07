@@ -123,6 +123,13 @@ Alpha Vantage meldet Kontingent- und Fehlerfälle mit **Status 200** und einem
 Hinweistext (`Note` / `Information`) — der Statuscode allein genügt nicht.
 Fehlende Werte stehen dort als `"None"`, `"-"` oder `""`, nie als `null`.
 
+Für europäische Notierungen löst `lib/quant/listing.ts` auf die US-Zweitnotierung
+auf (SAP.DE → SAP) — Analystenhäuser veröffentlichen je Unternehmen, nicht je
+Handelsplatz. **Dann muss der Vergleichskurs von derselben Notierung kommen:**
+ein Kursziel in Dollar neben einem Kurs in Euro ergäbe eine frei erfundene
+Prozentzahl. Die Funktion steht in einem eigenen Modul, weil eine Next.js-Route
+nur ihre Handler exportieren darf.
+
 Das Tageskontingent (rund 25 Abrufe) prägt die Architektur: `/api/quant/analysts`
 ist **eine eigene Route**, die der Reiter erst beim Öffnen abruft — läge der
 Block im Unternehmens-Dossier, verbrauchte jeder Seitenaufruf eines. Dazu zwölf

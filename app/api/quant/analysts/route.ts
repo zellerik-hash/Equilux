@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { toEodhd } from "@/lib/quant/prices";
 import { avOverview, type AvRatings } from "@/lib/quant/alphavantage";
+import { usListing } from "@/lib/quant/listing";
 
 export const runtime = "nodejs";
 
@@ -15,7 +16,14 @@ export const runtime = "nodejs";
  * Reihenfolge: EODHD (falls die Fundamentaldaten im Tarif sind), sonst Alpha
  * Vantage. Beides sind Veröffentlichungen Dritter — EQUILUX gibt kein eigenes
  * Kursziel ab und mittelt die Urteile nicht zu einer Note.
+ *
+ * Für europäische Notierungen wird auf die US-Zweitnotierung ausgewichen
+ * (SAP.DE → SAP): Analystenhäuser veröffentlichen ihre Ziele ohnehin je
+ * Unternehmen, nicht je Handelsplatz. Dann muss aber auch der Vergleichskurs
+ * von dort kommen — ein Kursziel in Dollar neben einem Kurs in Euro wäre eine
+ * frei erfundene Prozentzahl.
  */
+
 
 interface Payload {
   target: number | null;
@@ -83,12 +91,16 @@ export async function GET(req: Request) {
 
   let data: Payload | null = null;
   let note: string | undefined;
+  // Von welchem Handelsplatz der Vergleichskurs geholt wird — muss zur
+  // Währung des Kursziels passen.
+  let priceSymbol = symbol;
 
   if (key && t) {
     data = await fromEodhd(t, key).catch(() => null);
   }
   if (!data) {
-    const av = await avOverview(symbol);
+    const alt = usListing(symbol);
+    const av = await avOverview(alt ?? symbol);
     if (av.data && (av.data.ratings || av.data.target !== undefined)) {
       data = {
         target: av.data.target ?? null,
@@ -97,11 +109,19 @@ export async function GET(req: Request) {
         currency: av.data.currency ?? null,
         source: "Alpha Vantage",
       };
+      if (alt && alt !== symbol) {
+        priceSymbol = alt;
+        note = `Kursziel und Urteile beziehen sich auf die US-Notierung ${alt} — ` +
+          `unter ${symbol} werden sie nicht geführt. Der Vergleichskurs stammt aus derselben Notierung.`;
+      }
     } else {
       note = av.note ?? "Für diesen Titel liegen keine Analystenurteile vor.";
     }
   }
-  if (data && key && t) data.price = await lastPrice(t, key);
+  if (data && key) {
+    const pt = toEodhd(priceSymbol);
+    if (pt) data.price = await lastPrice(pt, key);
+  }
 
   return NextResponse.json({ ok: true, symbol, analysts: data, note });
 }

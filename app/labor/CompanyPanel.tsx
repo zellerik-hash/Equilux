@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import s from "./company.module.css";
 import NetworkGraph, { type NetNode } from "./NetworkGraph";
 import Logo from "./Logo";
@@ -60,6 +60,11 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
   // verbraucht werden.
   const [ana, setAna] = useState<{ data: Analysts | null; note?: string } | null>(null);
   const [anaBusy, setAnaBusy] = useState(false);
+  // Merker als Ref, nicht als State: stünde er in den Abhängigkeiten des
+  // Effekts, würde sein Setzen den Effekt neu auslösen, dessen Aufräumen die
+  // laufende Anfrage verwirft — und der neue Durchlauf stiege wegen desselben
+  // Merkers sofort wieder aus. Der Reiter bliebe für immer bei "lädt …".
+  const anaFor = useRef<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -72,19 +77,26 @@ export default function CompanyPanel({ symbol }: { symbol: string }) {
     return () => { alive = false; };
   }, [symbol]);
 
-  useEffect(() => { setAna(null); }, [symbol]);
+  useEffect(() => { setAna(null); anaFor.current = null; }, [symbol]);
 
   useEffect(() => {
-    if (tab !== "analysten" || ana || anaBusy) return;
+    if (tab !== "analysten" || anaFor.current === symbol) return;
+    anaFor.current = symbol;
     let alive = true;
+    let settled = false;
     setAnaBusy(true);
     fetch(`/api/quant/analysts?symbol=${encodeURIComponent(symbol)}`)
       .then((r) => r.json())
-      .then((j) => { if (alive) setAna({ data: j.analysts ?? null, note: j.note }); })
-      .catch(() => { if (alive) setAna({ data: null, note: "Keine Verbindung zur Analystenquelle." }); })
+      .then((j) => { settled = true; if (alive) setAna({ data: j.analysts ?? null, note: j.note }); })
+      .catch(() => { settled = true; if (alive) setAna({ data: null, note: "Keine Verbindung zur Analystenquelle." }); })
       .finally(() => { if (alive) setAnaBusy(false); });
-    return () => { alive = false; };
-  }, [tab, symbol, ana, anaBusy]);
+    return () => {
+      alive = false;
+      // Abgebrochen, bevor die Antwort da war (Reiterwechsel): den Merker
+      // zurücknehmen, sonst wird nie wieder gefragt.
+      if (!settled) anaFor.current = null;
+    };
+  }, [tab, symbol]);
 
   const meta = metaFor(symbol);
   const company = data?.name || meta.name || symbol;
