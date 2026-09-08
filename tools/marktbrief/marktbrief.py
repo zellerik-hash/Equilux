@@ -433,7 +433,7 @@ def render_band(now_reader: datetime, reader_tz) -> str:
         width = max(0.0, right - left)
         is_open = is_weekday and start <= now_reader <= end
         col = PALETTE[color_key]
-        bar_bg = col if is_open else _rgba(col, 0.22)
+        bar_bg = col if is_open else _rgba(col, 0.16)
         bar_fg = PALETTE["ink"] if is_open else PALETTE["muted"]
         rows.append(f"""
         <div class="rail">
@@ -454,6 +454,7 @@ def render_band(now_reader: datetime, reader_tz) -> str:
     )
     return f"""
     <section class="band" aria-label="Handelsfenster">
+      <div class="now-dot" style="left:{now_left:.2f}%"></div>
       <div class="now-line" style="left:{now_left:.2f}%"></div>
       {''.join(rows)}
       <div class="axis">{ticks}</div>
@@ -623,6 +624,7 @@ def _risk_chip(risiko) -> str:
 def render_page(session_key: str, brief: dict | None, note: str | None,
                 now_reader: datetime, reader_tz, tzname: str) -> str:
     s = SESSIONS[session_key]
+    accent = PALETTE[s["color"]] if s["color"] else PALETTE["muted"]
     chip_color = PALETTE[s["color"]] if s["color"] else PALETTE["panel2"]
     chip_fg = PALETTE["ink"] if s["color"] else PALETTE["text"]
 
@@ -671,11 +673,16 @@ def render_page(session_key: str, brief: dict | None, note: str | None,
 </style>
 </head>
 <body>
-<main class="sheet">
+<main class="sheet" style="--accent:{accent}">
   <header class="head">
-    <div class="head-top">
+    <div class="masthead">
+      <span class="wordmark mono">EQUILUX</span>
+      <span class="masthead-kicker mono">Marktbrief</span>
+      <span class="masthead-stamp mono">{now_reader:%a · %d.%m.%Y · %H:%M · }{esc(tzname)}</span>
+    </div>
+    <div class="masthead-rule"></div>
+    <div class="mark-row">
       <span class="mark" style="background:{chip_color};color:{chip_fg}">{esc(s['label'])}</span>
-      <span class="mono stamp">{now_reader:%a %d.%m.%Y · %H:%M} {esc(tzname)}</span>
     </div>
     <h1 class="hl">{esc(schlagzeile)}</h1>
     <div class="risk-row">{_risk_chip(brief.get('risiko'))}</div>
@@ -707,166 +714,202 @@ def _css() -> str:
   --ink:{p['ink']}; --panel:{p['panel']}; --panel-2:{p['panel2']}; --line:{p['line']};
   --text:{p['text']}; --muted:{p['muted']}; --dim:{p['dim']};
   --up:{p['up']}; --down:{p['down']}; --london:{p['london']}; --newyork:{p['newyork']};
+  --accent:{p['muted']};
 }}
 * {{ box-sizing:border-box; }}
+html {{ -webkit-text-size-adjust:100%; }}
 body {{
   margin:0; background:var(--ink); color:var(--text);
   font-family:"IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
-  font-size:15px; line-height:1.55;
+  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
 }}
-.mono {{ font-family:"IBM Plex Mono", ui-monospace, monospace; }}
-.num {{ text-align:right; font-variant-numeric:tabular-nums; }}
-.sheet {{ max-width:820px; margin:0 auto; padding:28px 20px 60px; }}
-.rubric {{
-  font-family:"IBM Plex Mono", ui-monospace, monospace;
-  font-size:11px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase;
-  color:var(--muted); margin:0 0 12px;
-}}
-.block {{ margin-top:30px; }}
+.mono {{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-feature-settings:"tnum" 1; }}
+.num {{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }}
+.sheet {{ max-width:740px; margin:0 auto; padding:44px 22px 72px; }}
 
-.head-top {{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }}
-.mark {{
-  font-family:"IBM Plex Mono", ui-monospace, monospace; font-weight:600;
-  font-size:12px; letter-spacing:0.06em; padding:4px 10px; border-radius:4px;
+/* Rubriken als redaktionelle Abschnittsköpfe: Label, dann Haarlinie bis zum Rand */
+.rubric {{
+  display:flex; align-items:center; gap:14px;
+  font-family:"IBM Plex Mono", ui-monospace, monospace;
+  font-size:10.5px; font-weight:600; letter-spacing:0.2em; text-transform:uppercase;
+  color:var(--muted); margin:0 0 16px;
 }}
-.stamp {{ font-size:12px; color:var(--muted); }}
+.rubric::after {{ content:""; flex:1; height:1px; background:var(--line); }}
+.block {{ margin-top:40px; }}
+
+/* Kopf / Masthead */
+.masthead {{ display:flex; align-items:baseline; gap:11px; flex-wrap:wrap; }}
+.wordmark {{
+  font-size:13px; font-weight:600; letter-spacing:0.34em; color:var(--text);
+}}
+.masthead-kicker {{ font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--dim); }}
+.masthead-stamp {{ margin-left:auto; font-size:11px; letter-spacing:0.02em; color:var(--dim); }}
+.masthead-rule {{ height:2px; background:var(--accent); margin:12px 0 20px; }}
+.mark-row {{ margin-bottom:2px; }}
+.mark {{
+  display:inline-block; font-family:"IBM Plex Mono", ui-monospace, monospace; font-weight:600;
+  font-size:11px; letter-spacing:0.12em; text-transform:uppercase; padding:5px 11px; border-radius:3px;
+}}
 .hl {{
   font-family:"Newsreader", Georgia, serif; font-weight:400;
-  font-size:clamp(27px, 3.6vw, 42px); line-height:1.18; letter-spacing:-0.015em;
-  margin:16px 0 12px; max-width:24ch;
+  font-size:clamp(30px, 4.6vw, 47px); line-height:1.1; letter-spacing:-0.021em;
+  margin:14px 0 16px; max-width:21ch; text-wrap:balance;
 }}
-.risk-row {{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }}
+.risk-row {{ display:flex; align-items:baseline; gap:11px; flex-wrap:wrap; }}
 .risk {{
-  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:11px;
-  font-weight:600; letter-spacing:0.1em; text-transform:uppercase;
-  padding:3px 8px; border-radius:4px; border:1px solid var(--line);
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:10px;
+  font-weight:600; letter-spacing:0.13em; text-transform:uppercase;
+  padding:4px 9px; border-radius:3px; border:1px solid var(--line); white-space:nowrap;
 }}
-.risk-on {{ color:var(--up); border-color:var(--up); }}
-.risk-off {{ color:var(--down); border-color:var(--down); }}
+.risk-on {{ color:var(--up); border-color:color-mix(in srgb, var(--up) 55%, var(--line)); }}
+.risk-off {{ color:var(--down); border-color:color-mix(in srgb, var(--down) 55%, var(--line)); }}
 .risk-neutral {{ color:var(--muted); }}
-.risk-why {{ color:var(--muted); font-size:14px; }}
+.risk-why {{ color:var(--muted); font-size:14px; line-height:1.4; }}
 .hinweis {{
-  margin-top:14px; padding:10px 12px; border:1px solid var(--line);
-  border-radius:6px; background:var(--panel); color:var(--muted); font-size:14px;
+  margin-top:16px; padding:11px 14px; border-left:2px solid var(--accent);
+  background:var(--panel); color:var(--muted); font-size:13.5px; line-height:1.5;
 }}
 
 /* Handelsfenster-Band */
 .band {{
-  position:relative; margin-top:24px; padding:18px 12px 30px;
-  background:var(--panel); border:1px solid var(--line); border-radius:8px;
+  position:relative; margin-top:26px; padding:20px 16px 30px;
+  background:var(--panel); border-radius:6px;
 }}
-.rail {{ display:flex; align-items:center; gap:10px; margin:7px 0; }}
+.rail {{ display:flex; align-items:center; gap:12px; margin:8px 0; }}
 .rail-label {{
-  width:74px; flex:0 0 74px; font-family:"IBM Plex Mono", ui-monospace, monospace;
-  font-size:10px; letter-spacing:0.1em; color:var(--muted); text-align:right;
+  width:64px; flex:0 0 64px; font-family:"IBM Plex Mono", ui-monospace, monospace;
+  font-size:9.5px; letter-spacing:0.12em; color:var(--muted); text-align:right;
 }}
-.rail-track {{ position:relative; height:22px; flex:1; background:var(--panel-2); border-radius:4px; }}
+.rail-track {{
+  position:relative; height:17px; flex:1; background:var(--panel-2); border-radius:2px;
+  background-image:repeating-linear-gradient(to right,
+    transparent 0, transparent calc(11.764% - 1px),
+    color-mix(in srgb, var(--line) 60%, transparent) calc(11.764% - 1px),
+    color-mix(in srgb, var(--line) 60%, transparent) 11.764%);
+}}
 .bar {{
-  position:absolute; top:0; height:22px; border-radius:4px; display:flex;
+  position:absolute; top:0; height:17px; border-radius:2px; display:flex;
   align-items:center; justify-content:space-between; padding:0 6px;
-  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:9px; min-width:44px;
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:8.5px;
+  letter-spacing:0.02em; min-width:46px;
 }}
-.axis {{ position:relative; height:14px; margin:8px 0 0 84px; }}
+.axis {{ position:relative; height:12px; margin:10px 0 0 76px; }}
 .axis span {{
   position:absolute; transform:translateX(-50%);
-  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:9px; color:var(--dim);
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:8.5px; color:var(--dim);
 }}
-.now-line {{ position:absolute; top:14px; bottom:26px; width:1px; background:var(--text); margin-left:84px; z-index:2; }}
+.now-line {{ position:absolute; top:16px; bottom:24px; width:1px; background:var(--text); margin-left:76px; z-index:2; }}
+.now-dot {{
+  position:absolute; top:13px; width:5px; height:5px; border-radius:50%;
+  background:var(--text); margin-left:76px; transform:translateX(-50%); z-index:3;
+}}
 .now-stamp {{
-  position:absolute; bottom:8px; transform:translateX(-50%); margin-left:84px;
-  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:9px; color:var(--text);
+  position:absolute; bottom:8px; transform:translateX(-50%); margin-left:76px;
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:8.5px; color:var(--text);
 }}
 
-/* Lage */
-.lage {{ margin-top:28px; }}
+/* Lage — der einzige Block, der wirklich gelesen wird */
+.lage {{ margin-top:34px; }}
 .lage ul {{ list-style:none; margin:0; padding:0; }}
 .lage li {{
-  position:relative; padding-left:18px; margin:12px 0; font-size:16px; line-height:1.5;
-  max-width:76ch;
+  position:relative; padding-left:20px; margin:14px 0; font-size:16px; line-height:1.52;
+  max-width:70ch;
 }}
 .lage li::before {{
-  content:""; position:absolute; left:0; top:11px; width:7px; height:2px; background:var(--dim);
+  content:""; position:absolute; left:0; top:11px; width:9px; height:2px; background:var(--accent);
 }}
 
 /* Kachelraster */
-.tiles {{ display:flex; flex-wrap:wrap; gap:9px; }}
+.tiles {{ display:flex; flex-wrap:wrap; gap:8px; }}
 .tile {{
-  flex:1 1 150px; min-width:140px; border:1px solid var(--line); border-radius:7px;
-  padding:11px 12px; background:var(--panel);
+  flex:1 1 148px; min-width:138px; border:1px solid var(--line); border-radius:4px;
+  padding:12px 13px; background:color-mix(in srgb, var(--panel) 60%, transparent);
 }}
 .tile-name {{
-  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:10px;
-  letter-spacing:0.08em; text-transform:uppercase; color:var(--muted);
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:9.5px;
+  letter-spacing:0.11em; text-transform:uppercase; color:var(--muted);
 }}
-.tile-value {{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:20px; margin-top:4px; }}
-.tile-change {{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:13px; margin-top:2px; }}
-.tile-note {{ font-size:12px; color:var(--dim); margin-top:4px; }}
+.tile-value {{
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:22px; font-feature-settings:"tnum" 1;
+  margin-top:6px; letter-spacing:-0.01em;
+}}
+.tile-change {{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:12.5px; margin-top:3px; }}
+.tile-note {{ font-size:11.5px; color:var(--dim); margin-top:5px; line-height:1.35; }}
 .up {{ color:var(--up); }}
 .down {{ color:var(--down); }}
 .flat {{ color:var(--muted); }}
 
 /* Kalender */
-.cal {{ width:100%; border-collapse:collapse; font-size:14px; }}
+.cal {{ width:100%; border-collapse:collapse; font-size:13.5px; }}
 .cal th {{
-  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:10px;
-  letter-spacing:0.08em; text-transform:uppercase; color:var(--dim);
-  text-align:left; padding:6px 8px; border-bottom:1px solid var(--line);
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:9.5px;
+  letter-spacing:0.11em; text-transform:uppercase; color:var(--dim); font-weight:600;
+  text-align:left; padding:0 8px 9px; border-bottom:1px solid var(--line);
 }}
 .cal th.num {{ text-align:right; }}
-.cal td {{ padding:8px; border-bottom:1px solid var(--line); vertical-align:top; }}
+.cal td {{ padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:baseline; }}
+.cal tbody tr:last-child td {{ border-bottom:none; }}
 .cal tr.pending td {{ color:var(--muted); }}
+.cal tr.done td {{ color:var(--text); }}
 .region-tag {{
-  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:9px;
-  letter-spacing:0.06em; padding:2px 6px; border-radius:3px; border:1px solid var(--line);
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:8.5px;
+  letter-spacing:0.08em; padding:2px 6px; border-radius:2px; border:1px solid var(--line);
+  color:var(--muted);
 }}
-.region-tag.london {{ color:var(--london); border-color:var(--london); }}
-.region-tag.newyork {{ color:var(--newyork); border-color:var(--newyork); }}
+.region-tag.london {{ color:var(--london); border-color:color-mix(in srgb, var(--london) 45%, var(--line)); }}
+.region-tag.newyork {{ color:var(--newyork); border-color:color-mix(in srgb, var(--newyork) 45%, var(--line)); }}
 .region-tag.neutral {{ color:var(--muted); }}
-.dot {{ display:inline-block; width:5px; height:5px; border-radius:50%; margin-left:4px; vertical-align:middle; }}
+.dot {{ display:inline-block; width:5px; height:5px; border-radius:50%; margin-left:5px; vertical-align:middle; }}
 
 /* Zahlen heute */
-.earns {{ display:grid; grid-template-columns:1fr; gap:10px; }}
+.earns {{ display:grid; grid-template-columns:1fr; }}
 .earn {{
-  display:grid; grid-template-columns:120px 1fr; gap:4px 14px;
-  border:1px solid var(--line); border-radius:7px; padding:11px 12px; background:var(--panel);
+  display:grid; grid-template-columns:112px 1fr; gap:3px 16px;
+  padding:13px 0; border-bottom:1px solid var(--line);
 }}
-.earn-window {{ font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); }}
-.earn-name {{ grid-column:2; font-weight:500; }}
-.earn-ticker {{ color:var(--muted); font-size:12px; }}
-.earn-note {{ grid-column:2; font-size:13px; color:var(--muted); }}
+.earn:last-child {{ border-bottom:none; }}
+.earn-window {{
+  font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); padding-top:2px;
+}}
+.earn-name {{ grid-column:2; font-weight:500; font-size:15px; }}
+.earn-ticker {{ color:var(--muted); font-size:12px; margin-left:2px; }}
+.earn-note {{ grid-column:2; font-size:13px; color:var(--muted); line-height:1.45; margin-top:2px; }}
 
 /* Watchlist */
-.wls {{ display:grid; grid-template-columns:1fr; gap:9px; }}
-.wl {{ border:1px solid var(--line); border-radius:7px; padding:11px 12px; background:var(--panel); }}
-.wl-head {{ display:flex; align-items:baseline; gap:10px; }}
+.wls {{ display:grid; grid-template-columns:1fr; }}
+.wl {{ padding:13px 0; border-bottom:1px solid var(--line); }}
+.wl:last-child {{ border-bottom:none; }}
+.wl-head {{ display:flex; align-items:baseline; gap:11px; }}
 .wl-name {{ font-weight:500; }}
-.wl-value {{ font-size:15px; }}
-.wl-change {{ font-size:13px; }}
-.wl-note {{ font-size:13px; color:var(--muted); margin-top:3px; }}
+.wl-value {{ font-size:15px; font-feature-settings:"tnum" 1; margin-left:auto; }}
+.wl-change {{ font-size:12.5px; }}
+.wl-note {{ font-size:13px; color:var(--muted); margin-top:4px; line-height:1.45; }}
 
 /* Quellen */
-.srcs {{ display:flex; flex-wrap:wrap; gap:7px; }}
+.srcs {{ display:flex; flex-wrap:wrap; gap:6px; }}
 .src {{
-  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:11px;
-  padding:4px 9px; border:1px solid var(--line); border-radius:4px;
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:10.5px; letter-spacing:0.02em;
+  padding:4px 9px; border:1px solid var(--line); border-radius:2px;
   color:var(--muted); text-decoration:none;
 }}
 .src:hover {{ color:var(--text); border-color:var(--muted); }}
-.src:focus-visible {{ outline:2px solid var(--london); outline-offset:2px; }}
+.src:focus-visible {{ outline:2px solid var(--accent); outline-offset:2px; }}
 
 .next {{ list-style:none; margin:0; padding:0; }}
-.next li {{ position:relative; padding-left:16px; margin:8px 0; color:var(--muted); }}
-.next li::before {{ content:""; position:absolute; left:0; top:10px; width:6px; height:2px; background:var(--dim); }}
+.next li {{ position:relative; padding-left:18px; margin:9px 0; color:var(--muted); max-width:70ch; }}
+.next li::before {{ content:""; position:absolute; left:0; top:10px; width:9px; height:2px; background:var(--dim); }}
 
 .foot {{
-  margin-top:44px; padding-top:14px; border-top:1px solid var(--line);
-  font-size:12px; color:var(--dim); line-height:1.6;
+  margin-top:52px; padding-top:16px; border-top:1px solid var(--line);
+  font-size:11.5px; color:var(--dim); line-height:1.65; max-width:64ch;
 }}
 
 @media (max-width:720px) {{
+  .sheet {{ padding:32px 18px 56px; }}
   .cal .region, .cal th.region {{ display:none; }}
   .earn {{ grid-template-columns:1fr; }}
   .earn-name, .earn-note {{ grid-column:1; }}
+  .masthead-stamp {{ margin-left:0; flex-basis:100%; }}
 }}
 @media (prefers-reduced-motion: reduce) {{
   .sheet, .sheet * {{ animation:none !important; transition:none !important; }}
