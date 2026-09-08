@@ -22,7 +22,7 @@ import { env, envAny, missingEnvHint, resetEnvCache } from "@/lib/quant/env";
 import { parseRelations } from "@/lib/quant/relations";
 import { usListing } from "@/lib/quant/listing";
 import { cleanHouse, parseHouses } from "@/lib/quant/analystHouses";
-import { normalizeBrief, parseBrief, type BriefFeed } from "@/lib/quant/brief";
+import { normalizeBrief, parseBrief, currentSession, sessionClock, type BriefFeed } from "@/lib/quant/brief";
 import { quoteFrom, refFromTicker, stampAt, feedFacts, type FeedQuote } from "@/lib/quant/marketdata";
 
 // ── Mini-Harness ─────────────────────────────────────────────────────────────
@@ -600,6 +600,31 @@ section("Kursfeed fuer den Marktbrief");
   }]);
   ok("Feed-Fakten nennen Stand, Veraenderung und Uhrzeit",
      zeile.includes("24.310,55") && zeile.includes("+0,84") && zeile.includes("17:35"), zeile);
+}
+
+// ── 21. Session-Uhren ueber Zeitzonen und Mitternacht ───────────────────────
+section("Marktbrief — Session-Uhren");
+{
+  const sommer = new Date("2026-07-15T12:00:00Z");
+  ok("NY Open im Sommer um 15:35 Berliner Zeit",
+     sessionClock("ny_open", "Europe/Berlin", sommer) === "15:35",
+     sessionClock("ny_open", "Europe/Berlin", sommer));
+  ok("NY Open im Winter weiterhin um 15:35",
+     sessionClock("ny_open", "Europe/Berlin", new Date("2026-01-15T12:00:00Z")) === "15:35");
+
+  // Die USA stellen am 8. Maerz um, die EU erst am 29. — dazwischen ist der
+  // Abstand um eine Stunde kleiner. Eine feste Tabelle waere hier falsch.
+  ok("In der Sommerzeit-Luecke faellt NY Open eine Stunde frueher",
+     sessionClock("ny_open", "Europe/Berlin", new Date("2026-03-16T12:00:00Z")) === "14:35",
+     sessionClock("ny_open", "Europe/Berlin", new Date("2026-03-16T12:00:00Z")));
+
+  // Der Abstand muss ringfoermig gemessen werden. Vorher gewann um 00:30 der
+  // London Open des kommenden Morgens statt des New Yorker Schlusses von eben.
+  ok("Um 00:30 gilt noch der New Yorker Schluss",
+     currentSession("Europe/Berlin", new Date("2026-07-16T22:30:00Z")) === "ny_close",
+     currentSession("Europe/Berlin", new Date("2026-07-16T22:30:00Z")));
+  ok("Um 09:00 gilt London Open",
+     currentSession("Europe/Berlin", new Date("2026-07-15T07:00:00Z")) === "london_open");
 }
 
 // ── Ergebnis ─────────────────────────────────────────────────────────────────

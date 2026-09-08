@@ -83,7 +83,11 @@ export function currentSession(tz: string, when = new Date()): SessionKey {
   let bestDist = Infinity;
   for (const key of SESSION_ORDER) {
     const [h, mi] = sessionClock(key, tz, when).split(":").map(Number);
-    const dist = Math.abs(nowMin - (h * 60 + mi));
+    // Ringförmig messen: 23:50 ist von 00:10 zwanzig Minuten entfernt, nicht
+    // dreiundzwanzig Stunden. Ohne das gewänne um 00:30 der London Open des
+    // kommenden Morgens statt des New Yorker Schlusses von eben.
+    const raw = Math.abs(nowMin - (h * 60 + mi));
+    const dist = Math.min(raw, 1440 - raw);
     if (dist < bestDist) { bestDist = dist; best = key; }
   }
   return best;
